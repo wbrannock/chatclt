@@ -15,11 +15,11 @@ For upstream kotaemon documentation, see https://github.com/Cinnamon/kotaemon.
 ## Prerequisites
 
 - macOS or Linux (Apple Silicon works)
-- [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or Anaconda
+- [uv](https://docs.astral.sh/uv/) — install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or `brew install uv`
 - Git
-- An **OpenRouter** API key — sign up at https://openrouter.ai/keys (free tier is enough to start; add credit for Claude Sonnet)
+- An **OpenRouter** API key — sign up at https://openrouter.ai/keys (free tier works to start; add credit for Claude Sonnet)
 
-Disk: the conda env is ~4 GB. Indexed PDFs add ~100 MB per few dozen files.
+uv manages Python itself — you do **not** need conda or a pre-installed Python. Disk: the venv is ~4 GB. Indexed PDFs add ~100 MB per few dozen files.
 
 ---
 
@@ -36,29 +36,37 @@ Optional — track the upstream kotaemon project so we can pull fixes:
 git remote add upstream https://github.com/Cinnamon/kotaemon.git
 ```
 
-## 2. Create the conda environment
+## 2. Install dependencies with uv
 
 ```bash
-conda env create -f environment.yml
-conda activate kotaemon
+uv sync
 ```
 
-This builds a Python 3.10 env named `kotaemon` and installs `libs/kotaemon[adv]` and `libs/ktem` in **editable mode**, so your code edits apply immediately without reinstalling.
+That one command:
+- Installs Python 3.10 (pinned in `.python-version`) if you don't have it
+- Creates `.venv/` in the repo root
+- Installs every dep from `uv.lock` — **exact versions everyone on the team gets**
+- Installs the `libs/kotaemon` and `libs/ktem` workspaces in editable mode, so your code edits apply immediately
 
-First run takes 5–10 minutes (downloads torch, transformers, etc.). If it fails partway through on a single pip package, finish manually:
+First run takes ~1–3 minutes (fast — uv uses a global cache and parallel downloads). Subsequent `uv sync` calls are near-instant.
 
-```bash
-conda activate kotaemon
-pip install -e "libs/kotaemon[adv]"
-pip install -e libs/ktem
-```
+You have two options for activation:
+
+- **Prefix with `uv run`** (recommended, no activation needed):
+  ```bash
+  uv run python app.py
+  ```
+- **Activate the venv** the old-school way:
+  ```bash
+  source .venv/bin/activate
+  python app.py
+  ```
 
 To wipe and rebuild:
 
 ```bash
-conda deactivate
-conda env remove -n kotaemon
-conda env create -f environment.yml
+rm -rf .venv
+uv sync
 ```
 
 ## 3. Configure your API key
@@ -86,10 +94,10 @@ Optional:
 
 ## 4. Run the app
 
-From the repo root, with the env activated:
+From the repo root:
 
 ```bash
-PDFJS_PREBUILT_DIR="$(pwd)/libs/ktem/ktem/assets/prebuilt/pdfjs-4.0.379-dist" python app.py
+PDFJS_PREBUILT_DIR="$(pwd)/libs/ktem/ktem/assets/prebuilt/pdfjs-4.0.379-dist" uv run python app.py
 ```
 
 Open **http://localhost:7860** and log in as `admin` / `admin`.
@@ -128,13 +136,15 @@ Upload whichever subset you're working with. Indexed content is stored in `ktem_
 chatclt/
 ├── app.py                    # entrypoint (upstream)
 ├── flowsettings.py           # ← OUR defaults (OpenRouter, FastEmbed, etc.)
-├── environment.yml           # ← OUR conda spec
-├── TEAM_README.md            # ← this file
+├── pyproject.toml            # uv workspace root
+├── uv.lock                   # locked dep versions — commit changes
+├── .python-version           # pins Python 3.10
+├── README.md                 # ← this file
 ├── START_HERE.md             # quick start cheatsheet
 ├── .env.example              # template for .env
 ├── libs/
-│   ├── kotaemon/             # RAG engine (upstream, editable)
-│   └── ktem/                 # web UI (upstream)
+│   ├── kotaemon/             # RAG engine (upstream, editable workspace member)
+│   └── ktem/                 # web UI (upstream, editable workspace member)
 │       └── ktem/
 │           ├── assets/       # ← OUR theme, CSS, JS, favicon tweaks
 │           ├── pages/chat/   # ← OUR chat panel tweaks
@@ -143,6 +153,13 @@ chatclt/
 ```
 
 If you're changing behavior: `flowsettings.py` for model/embedding config, `libs/ktem/ktem/assets/theme.py` + `main.css` for look and feel, `libs/ktem/ktem/reasoning/simple.py` for how answers are generated.
+
+### Managing dependencies
+
+- Add a dep: `uv add <package>` (adds to `pyproject.toml` + `uv.lock`)
+- Add to a workspace member: `uv add --package kotaemon <package>`
+- Update everything: `uv lock --upgrade && uv sync`
+- **Commit `uv.lock`** whenever it changes — that's what keeps the team in sync.
 
 ---
 
@@ -158,25 +175,27 @@ git push -u origin your-name/short-feature-description
 
 Open a PR on GitHub targeting `main`. Get one review before merging.
 
-**Never commit**: `.env`, `ktem_app_data/`, `__pycache__/`, `*.pyc`, anything under `libs/*/cache/`.
+**Never commit**: `.env`, `ktem_app_data/`, `.venv/`, `__pycache__/`, `*.pyc`, anything under `libs/*/cache/`.
 
 Pull upstream kotaemon changes (optional, occasional):
 
 ```bash
 git fetch upstream
 git merge upstream/main        # or rebase — talk to the team first
+uv sync                        # resync after a merge that touches deps
 ```
 
 ---
 
 ## Troubleshooting
 
-- **`conda env create` fails** — update conda (`conda update -n base conda`), then retry. If a specific pip package is the problem, see the manual install in step 2.
-- **`ModuleNotFoundError` after running** — you forgot `conda activate kotaemon`.
+- **`uv: command not found`** — install it: `brew install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`, then restart your shell.
+- **`uv sync` fails on a single package** — run `uv sync --reinstall` to wipe and retry.
+- **`ModuleNotFoundError` after running** — you ran `python app.py` instead of `uv run python app.py`, or didn't activate `.venv`.
 - **`PDFJS_PREBUILT_DIR` path issue** — launch from the repo root; the `$(pwd)` in the run command assumes it.
-- **Port 7860 in use** — `GRADIO_SERVER_PORT=7861 python app.py`
+- **Port 7860 in use** — `GRADIO_SERVER_PORT=7861 uv run python app.py`
 - **401 from OpenRouter** — your key is wrong, or you left `OPENAI_API_BASE` pointed at `api.openai.com`. Both need to match step 3.
 - **Slow / repeated indexing** — make sure `ktem_app_data/` exists and is writable; deleting it forces a full reindex.
-- **Apple Silicon torch install takes forever** — that's normal on first env create; grab coffee.
+- **Lockfile conflicts on merge** — don't hand-edit `uv.lock`. Accept one side of the merge, then run `uv lock` to regenerate cleanly.
 
 Questions → ping the team chat. Bugs in our customizations → open an issue on this repo.
