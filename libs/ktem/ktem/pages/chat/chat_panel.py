@@ -6,9 +6,8 @@ KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 
 if not KH_DEMO_MODE:
     PLACEHOLDER_TEXT = (
-        "This is the beginning of a new conversation.\n"
-        "Start by uploading a file or a web URL. "
-        "Visit Files tab for more options (e.g: GraphRAG)."
+        "Welcome to ChatCLT.\n"
+        "Upload a document to get started, or browse your existing files."
     )
 else:
     PLACEHOLDER_TEXT = (

@@ -137,7 +137,8 @@ td {
 }
 
 mark {
-  background-color: #10b981;
+  background-color: #D4A574;
+  color: #1E1A14;
 }
 
 /* clpse */
@@ -396,8 +397,9 @@ details.evidence {
 }
 
 .message a.citation {
-  color: #10b981;
+  color: #C4854A;
   text-decoration: none;
+  font-weight: 600;
 }
 
 /* pop-up for file tag in chat input*/

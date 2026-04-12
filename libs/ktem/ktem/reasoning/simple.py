@@ -420,14 +420,14 @@ class FullQAPipeline(BaseReasoning):
             "highlight_citation": {
                 "name": "Citation style",
                 "value": (
-                    "highlight"
+                    "inline"
                     if not config("USE_LOW_LLM_REQUESTS", default=False, cast=bool)
                     else "off"
                 ),
                 "component": "radio",
                 "choices": [
-                    ("citation: highlight", "highlight"),
                     ("citation: inline", "inline"),
+                    ("citation: highlight", "highlight"),
                     ("no citation", "off"),
                 ],
             },

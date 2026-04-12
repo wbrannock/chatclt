@@ -1,0 +1,9 @@
+name: kotaemon
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - -e ./libs/kotaemon[adv]
+      - -e ./libs/ktem

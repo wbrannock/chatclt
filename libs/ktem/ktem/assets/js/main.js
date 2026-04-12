@@ -6,10 +6,10 @@ function run() {
   main_parent.parentNode.style = "gap: 0";
   main_parent.parentNode.parentNode.style = "padding: 0";
 
-  const version_node = document.createElement("p");
-  version_node.innerHTML = "version: KH_APP_VERSION";
-  version_node.style = "position: fixed; top: 10px; right: 10px;";
-  main_parent.appendChild(version_node);
+  const brand_node = document.createElement("div");
+  brand_node.innerHTML = '<span style="font-weight:700;letter-spacing:-0.02em;">Chat</span><span style="font-weight:400;opacity:0.7;">CLT</span>';
+  brand_node.style = "position: fixed; top: 8px; right: 24px; font-size: 15px; font-family: Inter, system-ui, sans-serif; color: var(--body-text-color); opacity: 0.6;";
+  main_parent.appendChild(brand_node);
 
   // add favicon
   const favicon = document.createElement("link");
