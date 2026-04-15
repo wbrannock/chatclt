@@ -1,5 +1,5 @@
 # Lite version
-FROM python:3.10-slim AS lite
+FROM python:3.11-slim AS lite
 
 # Common dependencies
 RUN apt-get update -qqy && \

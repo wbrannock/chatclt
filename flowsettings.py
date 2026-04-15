@@ -274,10 +274,12 @@ SETTINGS_REASONING = {
     },
 }
 
-USE_GLOBAL_GRAPHRAG = config("USE_GLOBAL_GRAPHRAG", default=True, cast=bool)
+# Graph retrieval is disabled by default in this fork.
+# Enable these explicitly only for graph-RAG experiments.
+USE_GLOBAL_GRAPHRAG = config("USE_GLOBAL_GRAPHRAG", default=False, cast=bool)
 USE_NANO_GRAPHRAG = config("USE_NANO_GRAPHRAG", default=False, cast=bool)
-USE_LIGHTRAG = config("USE_LIGHTRAG", default=True, cast=bool)
-USE_MS_GRAPHRAG = config("USE_MS_GRAPHRAG", default=True, cast=bool)
+USE_LIGHTRAG = config("USE_LIGHTRAG", default=False, cast=bool)
+USE_MS_GRAPHRAG = config("USE_MS_GRAPHRAG", default=False, cast=bool)
 
 GRAPHRAG_INDEX_TYPES = []
 

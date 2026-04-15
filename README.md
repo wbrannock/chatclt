@@ -43,7 +43,7 @@ uv sync
 ```
 
 That one command:
-- Installs Python 3.10 (pinned in `.python-version`) if you don't have it
+- Installs Python 3.11 (pinned in `.python-version`) if you don't have it
 - Creates `.venv/` in the repo root
 - Installs every dep from `uv.lock` — **exact versions everyone on the team gets**
 - Installs the `libs/kotaemon` and `libs/ktem` workspaces in editable mode, so your code edits apply immediately
@@ -138,7 +138,7 @@ chatclt/
 ├── flowsettings.py           # ← OUR defaults (OpenRouter, FastEmbed, etc.)
 ├── pyproject.toml            # uv workspace root
 ├── uv.lock                   # locked dep versions — commit changes
-├── .python-version           # pins Python 3.10
+├── .python-version           # pins Python 3.11
 ├── README.md                 # ← this file
 ├── START_HERE.md             # quick start cheatsheet
 ├── .env.example              # template for .env
