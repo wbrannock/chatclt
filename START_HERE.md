@@ -5,7 +5,8 @@
 ```bash
 conda activate kotaemon
 cd /Users/williambrannock/Documents/gradschool/capstone/v1/kotaemon
-PDFJS_PREBUILT_DIR="$(pwd)/libs/ktem/ktem/assets/prebuilt/pdfjs-4.0.379-dist" python app.py
+PDFJS_PREBUILT_DIR="$(pwd)/libs/ktem/ktem/assets/prebuilt/pdfjs-4.0.379-dist" 
+python app.py
 ```
 
 Open **http://localhost:7860** in your browser.
