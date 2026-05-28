@@ -470,6 +470,15 @@ class FileIndex(BaseIndex):
                 stripped_settings[key[len(prefix) :]] = value
 
         # transform selected id
+        if (
+            isinstance(selected, list)
+            and len(selected) >= 3
+            and selected[0] == "all"
+            and selected[2] is None
+            and user_id is not None
+        ):
+            selected = [selected[0], selected[1], user_id]
+
         selected_ids: Optional[list[str]] = self._selector_ui.get_selected_ids(selected)
 
         retrievers = []

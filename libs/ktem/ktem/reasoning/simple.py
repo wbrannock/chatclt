@@ -29,6 +29,7 @@ from kotaemon.indices.qa.citation_qa import (
     AnswerWithContextPipeline,
 )
 from kotaemon.indices.qa.citation_qa_inline import AnswerWithInlineCitation
+from kotaemon.indices.qa.citation_qa_inline import InlineEvidence
 from kotaemon.indices.qa.format_context import PrepareEvidencePipeline
 from kotaemon.indices.qa.utils import replace_think_tag_with_details
 from kotaemon.llms import ChatLLM
@@ -220,6 +221,32 @@ class FullQAPipeline(BaseReasoning):
 
         return plot_content
 
+    def add_fallback_inline_citation(self, answer: Document, docs: list) -> str | None:
+        """Attach a best-effort citation when a local LLM ignores citation syntax."""
+        if not isinstance(self.answering_pipeline, AnswerWithInlineCitation):
+            return None
+
+        if not self.answering_pipeline.enable_citation or not docs or not answer.text:
+            return None
+
+        first_doc = docs[0]
+        words = first_doc.text.replace("\n", " ").split()
+        if len(words) < 6:
+            return None
+
+        start_phrase = " ".join(words[:6])
+        end_phrase = " ".join(words[min(len(words), 18) - 6 : min(len(words), 18)])
+        answer.metadata["citation"] = [
+            InlineEvidence(start_phrase=start_phrase, end_phrase=end_phrase, idx=1)
+        ]
+
+        if "【" in answer.text or "class='citation'" in answer.text:
+            cited_answer = answer.text
+        else:
+            cited_answer = f"{answer.text.rstrip()}【1】"
+
+        return self.answering_pipeline.replace_citation_with_link(cited_answer)
+
     def show_citations_and_addons(self, answer, docs, question):
         # show the evidence
         with_citation, without_citation = self.answering_pipeline.prepare_citations(
@@ -321,6 +348,12 @@ class FullQAPipeline(BaseReasoning):
             # clear the chat message and render again
             yield Document(channel="chat", content=None)
             yield Document(channel="chat", content=processed_answer)
+            answer.text = processed_answer
+
+        fallback_cited_answer = self.add_fallback_inline_citation(answer, docs)
+        if fallback_cited_answer:
+            yield Document(channel="chat", content=None)
+            yield Document(channel="chat", content=fallback_cited_answer)
 
         # show the evidence
         if scoring_thread:

@@ -119,7 +119,7 @@ class SetupPage(BasePage):
             )
             self.ollama_model_name = gr.Textbox(
                 label="LLM model name",
-                value=config("LOCAL_MODEL", default="qwen2.5:7b"),
+                value=config("LOCAL_MODEL", default="qwen3:4b-instruct"),
             )
             self.ollama_emb_model_name = gr.Textbox(
                 label="Embedding model name",
@@ -168,7 +168,7 @@ class SetupPage(BasePage):
 
         onFirstSetupComplete = onFirstSetupComplete.success(
             fn=self.update_default_settings,
-            inputs=[self.radio_model, self._app.settings_state],
+            inputs=[self.radio_model],
             outputs=self._app.settings_state,
         )
         for event in self._app.get_event("onFirstSetupComplete"):
@@ -390,7 +390,11 @@ class SetupPage(BasePage):
                 "Setup models failed. Please verify your connection and API key."
             )
 
-    def update_default_settings(self, radio_model_value, default_settings):
+    def update_default_settings(self, radio_model_value):
+        default_settings = self._app.default_settings.flatten()
+        if not radio_model_value:
+            return default_settings
+
         # revise default settings
         # reranking llm
         default_settings["index.options.1.reranking_llm"] = radio_model_value

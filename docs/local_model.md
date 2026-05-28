@@ -13,8 +13,35 @@ Install [ollama](https://github.com/ollama/ollama) and start the application.
 Pull your model (e.g):
 
 ```
-ollama pull llama3.1:8b
+ollama pull qwen3:4b-instruct
 ollama pull nomic-embed-text
+```
+
+For an M3 Pro MacBook with 18 GB RAM, `qwen3:4b-instruct` is the recommended
+first local chat model. It is small enough to run comfortably through Ollama,
+while still giving useful RAG answers. Start with a 32K context window:
+
+```
+LOCAL_MODEL=qwen3:4b-instruct
+LOCAL_MODEL_EMBEDDINGS=nomic-embed-text
+LOCAL_MODEL_CONTEXT_LENGTH=32768
+```
+
+In Chat settings, select `ollama-qwen3-4b-instruct-32k` for the explicit 32K
+context path, or `ollama-qwen3-4b-instruct` for the standard Ollama-compatible
+OpenAI endpoint path.
+
+Qwen3 4B advertises very long-context capability, but memory use grows with the
+active context window. Treat 64K+ as a stress test on this machine, not the
+default.
+
+The `qwen3:4b` thinking tag may stream a visible reasoning trace before the
+final answer. That is useful for reasoning experiments but noisy for RAG. If you
+want to compare it directly, set:
+
+```
+ollama pull qwen3:4b
+LOCAL_MODEL=qwen3:4b
 ```
 
 Setup LLM and Embedding model on Resources tab with type OpenAI. Set these model parameters to connect to Ollama:
@@ -22,7 +49,7 @@ Setup LLM and Embedding model on Resources tab with type OpenAI. Set these model
 ```
 api_key: ollama
 base_url: http://localhost:11434/v1/
-model: gemma2:2b (for llm) | nomic-embed-text (for embedding)
+model: qwen3:4b-instruct (for llm) | nomic-embed-text (for embedding)
 ```
 
 ![Models](https://raw.githubusercontent.com/Cinnamon/kotaemon/main/docs/images/models.png)

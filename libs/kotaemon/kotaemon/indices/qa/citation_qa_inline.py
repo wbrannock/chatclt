@@ -190,6 +190,12 @@ class AnswerWithInlineCitation(AnswerWithContextPipeline):
 
         return answer
 
+    def extract_final_answer(self, output: str) -> str:
+        if START_ANSWER in output:
+            return output.split(START_ANSWER, 1)[1].strip()
+
+        return output.strip()
+
     def stream(  # type: ignore
         self,
         question: str,
@@ -298,6 +304,9 @@ class AnswerWithInlineCitation(AnswerWithContextPipeline):
 
         if mindmap_thread:
             mindmap_thread.join(timeout=CITATION_TIMEOUT)
+
+        if evidence and not final_answer:
+            final_answer = self.extract_final_answer(output)
 
         # convert citation to link
         answer = Document(

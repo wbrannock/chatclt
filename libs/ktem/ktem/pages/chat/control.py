@@ -465,7 +465,7 @@ class ConversationControl(BasePage):
     def _on_app_created(self):
         """Reload the conversation once the app is created"""
         self._app.app.load(
-            self.reload_conv,
-            inputs=[self._app.user_id],
+            lambda: self.reload_conv(None),
+            inputs=[],
             outputs=[self.conversation],
         )

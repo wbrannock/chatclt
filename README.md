@@ -91,6 +91,7 @@ We're pointing the "OpenAI" variables at OpenRouter because OpenRouter is API-co
 Optional:
 - Reranking: add `COHERE_API_KEY=...` to `.env`
 - Different chat model: change `OPENAI_CHAT_MODEL` to any OpenRouter model id (e.g. `openai/gpt-4o-mini`, `meta-llama/llama-3.1-70b-instruct`)
+- Local Ollama: set `LOCAL_MODEL=qwen3:4b-instruct`, `LOCAL_MODEL_EMBEDDINGS=nomic-embed-text`, and `LOCAL_MODEL_CONTEXT_LENGTH=32768`. See [local model setup](docs/local_model.md).
 
 When `OPENAI_API_BASE` points at OpenRouter, ChatCLT also registers a curated set of open-weight model candidates in Chat settings so you can compare locally plausible models without editing `.env` for each run:
 

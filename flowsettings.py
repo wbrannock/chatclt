@@ -217,23 +217,44 @@ if VOYAGE_API_KEY:
         "default": False,
     }
 
-if config("LOCAL_MODEL", default=""):
+LOCAL_MODEL = config("LOCAL_MODEL", default="qwen3:4b-instruct")
+LOCAL_MODEL_EMBEDDINGS = config("LOCAL_MODEL_EMBEDDINGS", default="nomic-embed-text")
+LOCAL_MODEL_CONTEXT_LENGTH = config(
+    "LOCAL_MODEL_CONTEXT_LENGTH", default=32768, cast=int
+)
+LOCAL_MODEL_OPTION_NAME = f"ollama-{LOCAL_MODEL.replace(':', '-')}"
+LOCAL_MODEL_LONG_CONTEXT_OPTION_NAME = (
+    f"{LOCAL_MODEL_OPTION_NAME}-{LOCAL_MODEL_CONTEXT_LENGTH // 1000}k"
+)
+
+if LOCAL_MODEL:
+    local_ollama_spec = {
+        "__type__": "kotaemon.llms.ChatOpenAI",
+        "base_url": KH_OLLAMA_URL,
+        "model": LOCAL_MODEL,
+        "api_key": "ollama",
+    }
+    local_ollama_long_context_spec = {
+        "__type__": "kotaemon.llms.LCOllamaChat",
+        "base_url": KH_OLLAMA_URL.replace("v1/", ""),
+        "model": LOCAL_MODEL,
+        "num_ctx": LOCAL_MODEL_CONTEXT_LENGTH,
+    }
+
     KH_LLMS["ollama"] = {
-        "spec": {
-            "__type__": "kotaemon.llms.ChatOpenAI",
-            "base_url": KH_OLLAMA_URL,
-            "model": config("LOCAL_MODEL", default="qwen2.5:7b"),
-            "api_key": "ollama",
-        },
+        "spec": local_ollama_spec,
         "default": False,
     }
     KH_LLMS["ollama-long-context"] = {
-        "spec": {
-            "__type__": "kotaemon.llms.LCOllamaChat",
-            "base_url": KH_OLLAMA_URL.replace("v1/", ""),
-            "model": config("LOCAL_MODEL", default="qwen2.5:7b"),
-            "num_ctx": 8192,
-        },
+        "spec": local_ollama_long_context_spec,
+        "default": False,
+    }
+    KH_LLMS[LOCAL_MODEL_OPTION_NAME] = {
+        "spec": local_ollama_spec,
+        "default": False,
+    }
+    KH_LLMS[LOCAL_MODEL_LONG_CONTEXT_OPTION_NAME] = {
+        "spec": local_ollama_long_context_spec,
         "default": False,
     }
 
@@ -241,7 +262,7 @@ if config("LOCAL_MODEL", default=""):
         "spec": {
             "__type__": "kotaemon.embeddings.OpenAIEmbeddings",
             "base_url": KH_OLLAMA_URL,
-            "model": config("LOCAL_MODEL_EMBEDDINGS", default="nomic-embed-text"),
+            "model": LOCAL_MODEL_EMBEDDINGS,
             "api_key": "ollama",
         },
         "default": False,
