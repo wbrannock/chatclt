@@ -86,12 +86,10 @@ class LLMManager:
         return key in self._models
 
     @overload
-    def get(self, key: str, default: None) -> Optional[ChatLLM]:
-        ...
+    def get(self, key: str, default: None) -> Optional[ChatLLM]: ...
 
     @overload
-    def get(self, key: str, default: ChatLLM) -> ChatLLM:
-        ...
+    def get(self, key: str, default: ChatLLM) -> ChatLLM: ...
 
     def get(self, key: str, default: Optional[ChatLLM] = None) -> Optional[ChatLLM]:
         """Get model by name with default value"""
@@ -138,6 +136,23 @@ class LLMManager:
             return self.get_random_name()
 
         return self._default
+
+    def get_display_name(self, name: str) -> str:
+        """Get a human-friendly model display name."""
+        spec = self._info.get(name, {}).get("spec", {})
+        model = str(spec.get("model") or spec.get("model_name") or "")
+
+        if model.startswith("anthropic/claude-sonnet"):
+            return "Sonnet"
+
+        return name
+
+    def get_default_choice_label(self) -> str:
+        """Get the label for the dropdown option that resolves to the default LLM."""
+        if not self._default:
+            return "(random)"
+
+        return f"{self.get_display_name(self._default)} (default)"
 
     def get_random(self) -> ChatLLM:
         """Get random model"""

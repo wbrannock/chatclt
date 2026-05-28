@@ -92,6 +92,21 @@ Optional:
 - Reranking: add `COHERE_API_KEY=...` to `.env`
 - Different chat model: change `OPENAI_CHAT_MODEL` to any OpenRouter model id (e.g. `openai/gpt-4o-mini`, `meta-llama/llama-3.1-70b-instruct`)
 
+When `OPENAI_API_BASE` points at OpenRouter, ChatCLT also registers a curated set of open-weight model candidates in Chat settings so you can compare locally plausible models without editing `.env` for each run:
+
+| UI option | OpenRouter model |
+| --- | --- |
+| `openrouter-qwen3-14b` | `qwen/qwen3-14b` |
+| `openrouter-gemma-3-12b` | `google/gemma-3-12b-it` |
+| `openrouter-gemma-4-26b-a4b` | `google/gemma-4-26b-a4b-it` |
+| `openrouter-qwen3-30b-a3b` | `qwen/qwen3-30b-a3b` |
+| `openrouter-qwen3-32b` | `qwen/qwen3-32b` |
+| `openrouter-mistral-small-3.2-24b` | `mistralai/mistral-small-3.2-24b-instruct` |
+| `openrouter-mistral-nemo` | `mistralai/mistral-nemo` |
+| `openrouter-llama-3.1-8b` | `meta-llama/llama-3.1-8b-instruct` |
+| `openrouter-phi-4` | `microsoft/phi-4` |
+| `openrouter-deepseek-r1-distill-qwen-32b` | `deepseek/deepseek-r1-distill-qwen-32b` |
+
 ## 4. Run the app
 
 From the repo root:

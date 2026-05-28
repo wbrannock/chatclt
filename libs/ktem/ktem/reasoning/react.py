@@ -195,9 +195,11 @@ class ReactAgentPipeline(BaseReasoning):
             "<b>Action</b>: <em>{tool}[{input}]</em>\n\n<b>Output</b>: {output}"
         ).format(
             tool=step.tool if status == "thinking" else "",
-            input=step.tool_input.replace("\n", "").replace('"', "")
-            if status == "thinking"
-            else "",
+            input=(
+                step.tool_input.replace("\n", "").replace('"', "")
+                if status == "thinking"
+                else ""
+            ),
             output=output if status == "thinking" else "Finished",
         )
         return Document(
@@ -308,7 +310,7 @@ class ReactAgentPipeline(BaseReasoning):
     @classmethod
     def get_user_settings(cls) -> dict:
         llm = ""
-        llm_choices = [("(default)", "")]
+        llm_choices = [(llms.get_default_choice_label(), "")]
         try:
             llm_choices += [(_, _) for _ in llms.options().keys()]
         except Exception as e:

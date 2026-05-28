@@ -145,20 +145,50 @@ OPENAI_DEFAULT = "<YOUR_OPENAI_KEY>"
 OPENAI_API_KEY = config("OPENAI_API_KEY", default=OPENAI_DEFAULT)
 GOOGLE_API_KEY = config("GOOGLE_API_KEY", default="your-key")
 IS_OPENAI_DEFAULT = len(OPENAI_API_KEY) > 0 and OPENAI_API_KEY != OPENAI_DEFAULT
+OPENAI_API_BASE = config("OPENAI_API_BASE", default="") or "https://api.openai.com/v1"
+
+OPENROUTER_LOCAL_MODEL_CANDIDATES = {
+    # Curated May 27, 2026: open-weight models available on OpenRouter that are
+    # also plausible to test locally via Ollama/llama.cpp in quantized form.
+    "openrouter-qwen3-14b": "qwen/qwen3-14b",
+    "openrouter-gemma-3-12b": "google/gemma-3-12b-it",
+    "openrouter-gemma-4-26b-a4b": "google/gemma-4-26b-a4b-it",
+    "openrouter-qwen3-30b-a3b": "qwen/qwen3-30b-a3b",
+    "openrouter-qwen3-32b": "qwen/qwen3-32b",
+    "openrouter-mistral-small-3.2-24b": "mistralai/mistral-small-3.2-24b-instruct",
+    "openrouter-mistral-nemo": "mistralai/mistral-nemo",
+    "openrouter-llama-3.1-8b": "meta-llama/llama-3.1-8b-instruct",
+    "openrouter-phi-4": "microsoft/phi-4",
+    "openrouter-deepseek-r1-distill-qwen-32b": "deepseek/deepseek-r1-distill-qwen-32b",
+}
 
 if OPENAI_API_KEY:
     KH_LLMS["openai"] = {
         "spec": {
             "__type__": "kotaemon.llms.ChatOpenAI",
             "temperature": 0,
-            "base_url": config("OPENAI_API_BASE", default="")
-            or "https://api.openai.com/v1",
+            "base_url": OPENAI_API_BASE,
             "api_key": OPENAI_API_KEY,
             "model": config("OPENAI_CHAT_MODEL", default="gpt-4o-mini"),
             "timeout": 20,
         },
         "default": IS_OPENAI_DEFAULT,
     }
+
+    if "openrouter.ai" in OPENAI_API_BASE:
+        for model_name, model_id in OPENROUTER_LOCAL_MODEL_CANDIDATES.items():
+            KH_LLMS[model_name] = {
+                "spec": {
+                    "__type__": "kotaemon.llms.ChatOpenAI",
+                    "temperature": 0,
+                    "base_url": OPENAI_API_BASE,
+                    "api_key": OPENAI_API_KEY,
+                    "model": model_id,
+                    "timeout": 30,
+                },
+                "default": False,
+            }
+
     # OpenRouter does not support embeddings, so we use FastEmbed locally instead
     KH_EMBEDDINGS["fastembed"] = {
         "spec": {

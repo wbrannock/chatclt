@@ -399,7 +399,7 @@ class FullQAPipeline(BaseReasoning):
         from ktem.llms.manager import llms
 
         llm = ""
-        choices = [("(default)", "")]
+        choices = [(llms.get_default_choice_label(), "")]
         try:
             choices += [(_, _) for _ in llms.options().keys()]
         except Exception as e:

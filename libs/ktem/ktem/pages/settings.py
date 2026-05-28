@@ -415,7 +415,7 @@ class SettingsPage(BasePage):
             from ktem.llms.manager import llms
 
             if llms._default:
-                llm_choices = [(f"{llms._default} (default)", "")]
+                llm_choices = [(llms.get_default_choice_label(), "")]
             else:
                 llm_choices = [("(random)", "")]
             llm_choices += [(_, _) for _ in llms.options().keys()]
