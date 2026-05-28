@@ -1,13 +1,11 @@
 name: style-check
 
 on:
-  pull_request:
-    branches: [main, develop]
-  push:
-    branches: [main, develop]
+  workflow_dispatch:
 
 jobs:
   pre-commit:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Clone the repo

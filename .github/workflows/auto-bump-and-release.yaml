@@ -1,12 +1,11 @@
 name: Auto Bump and Release
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   auto-bump-and-release:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Clone the repo
