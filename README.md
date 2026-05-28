@@ -108,25 +108,20 @@ Stop the app with `Ctrl+C` in the terminal.
 
 ## Using the app
 
-1. **Files** tab → upload PDFs (drag-and-drop works). Indexing runs once per file; progress shows in the UI.
+1. **Files** tab → upload PDFs (drag-and-drop works), paste web links, or use **Use Local Folder** to import a server-local folder. Indexing runs once per file; progress shows in the UI.
 2. **Chat** tab → ask questions. Answers cite the source PDF and page.
 3. **File Collection** panel on the left of Chat → check the files you want in scope for the current question. Leave all unchecked to search everything.
 4. **Chat settings** (bottom of the Chat tab) → change reasoning method (`simple`, `complex`, `ReAct`, etc.), model, and response language.
 
 ### Our PDF corpus
 
-Sample PDFs live **outside the repo** at `../sample_rag_pdfs/`, grouped by subject:
+The UVA medical laboratories PDF corpus lives **outside the repo** at `../datarepo/dc_1224400_uvahealthsystemmedicallaboratories_summary`, grouped by laboratory area.
 
-| Folder | Files |
-| --- | --- |
-| pathology | 33 |
-| synthetic_procedures | 16 |
-| immunology | 5 |
-| hematology | 4 |
-| clinical_chemistry | 4 |
-| molecular_genetics | 2 |
+The older sample set, if present, lives at `../sample_rag_pdfs/`.
 
 Upload whichever subset you're working with. Indexed content is stored in `ktem_app_data/` (gitignored) and survives restarts — you don't need to re-upload every time.
+
+For the organized corpus, go to **Files** → **Use Local Folder**, enter `../datarepo/dc_1224400_uvahealthsystemmedicallaboratories_summary`, keep **Include subfolders** on, and keep **Create/update groups from folders** on if you want each folder to appear as a selectable group in Chat. Duplicate filenames are imported automatically by storing duplicate-name files under their relative folder path.
 
 ---
 

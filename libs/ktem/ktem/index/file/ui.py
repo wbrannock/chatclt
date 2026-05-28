@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import zipfile
+from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
 from typing import Generator
@@ -306,6 +307,31 @@ class FileIndexPage(BasePage):
                             lines=8,
                         )
                         gr.Markdown("(separated by new line)")
+
+                    with gr.Tab("Use Local Folder"):
+                        self.local_folder = gr.Textbox(
+                            label="Folder path",
+                            placeholder=(
+                                "../datarepo/"
+                                "dc_1224400_uvahealthsystemmedicallaboratories_summary"
+                            ),
+                            lines=1,
+                            max_lines=1,
+                        )
+                        self.local_folder_recursive = gr.Checkbox(
+                            value=True,
+                            label="Include subfolders",
+                            container=False,
+                        )
+                        self.local_folder_make_groups = gr.Checkbox(
+                            value=True,
+                            label="Create/update groups from folders",
+                            container=False,
+                        )
+                        self.import_directory_button = gr.Button(
+                            "Import Folder and Index",
+                            variant="primary",
+                        )
 
                     with gr.Accordion("Advanced indexing options", open=False):
                         with gr.Row():
@@ -897,6 +923,44 @@ class FileIndexPage(BasePage):
             outputs=[self.files],
         )
 
+        onDirectoryImported = self.import_directory_button.click(
+            fn=lambda: gr.update(visible=True),
+            outputs=[self.upload_progress_panel],
+        ).then(
+            fn=self.index_files_from_dir,
+            inputs=[
+                self.local_folder,
+                self.local_folder_recursive,
+                self.local_folder_make_groups,
+                self.reindex,
+                self._app.settings_state,
+                self._app.user_id,
+            ],
+            outputs=[self.upload_result, self.upload_info],
+            concurrency_limit=20,
+        )
+
+        directoryImportedEvent = (
+            onDirectoryImported.then(
+                fn=self.list_file,
+                inputs=[self._app.user_id, self.filter],
+                outputs=[self.file_list_state, self.file_list],
+                concurrency_limit=20,
+            )
+            .then(
+                fn=self.list_group,
+                inputs=[self._app.user_id, self.file_list_state],
+                outputs=[self.group_list_state, self.group_list],
+            )
+            .then(
+                fn=self.list_file_names,
+                inputs=[self.file_list_state],
+                outputs=[self.group_files],
+            )
+        )
+        for event in self._app.get_event(f"onFileIndex{self._index.id}Changed"):
+            directoryImportedEvent = directoryImportedEvent.then(**event)
+
         self.btn_close_upload_progress_panel.click(
             fn=lambda: (gr.update(visible=False), "", ""),
             outputs=[self.upload_progress_panel, self.upload_result, self.upload_info],
@@ -1264,78 +1328,241 @@ class FileIndexPage(BasePage):
 
         return returned_ids
 
-    def index_files_from_dir(
-        self, folder_path, reindex, settings, user_id
-    ) -> Generator[tuple[str, str], None, None]:
-        """This should be constructable by users
-
-        It means that the users can build their own index.
-        Build your own index:
-            - Input:
-                - Type: based on the type, then there are ranges of. Use can select
-                multiple panels:
-                    - Panels
-                    - Data sources
-                    - Include patterns
-                    - Exclude patterns
-                - Indexing functions. Can be a list of indexing functions. Each declared
-                function is:
-                    - Condition (the source that will go through this indexing function)
-                    - Function (the pipeline that run this)
-            - Output: artifacts that can be used to -> this is the artifacts that we
-            wish
-                - Build the UI
-                    - Upload page: fixed standard, based on the type
-                    - Read page: fixed standard, based on the type
-                    - Delete page: fixed standard, based on the type
-                - Build the index function
-                - Build the chat function
-
-        Step:
-            1. Decide on the artifacts
-            2. Implement the transformation from artifacts to UI
-        """
+    def _resolve_local_folder(self, folder_path: str) -> Path:
         if not folder_path:
-            yield "", ""
-            return
+            raise gr.Error("Folder path is required")
 
-        import fnmatch
-        from pathlib import Path
+        folder = Path(folder_path).expanduser()
+        if not folder.is_absolute():
+            folder = Path.cwd() / folder
+        folder = folder.resolve()
 
-        include_patterns: list[str] = []
-        exclude_patterns: list[str] = ["*.png", "*.gif", "*/.*"]
-        if include_patterns and exclude_patterns:
-            raise ValueError("Cannot have both include and exclude patterns")
+        if not folder.exists():
+            raise gr.Error(f"Folder does not exist: {folder}")
+        if not folder.is_dir():
+            raise gr.Error(f"Path is not a folder: {folder}")
 
-        # clean up the include patterns
-        for idx in range(len(include_patterns)):
-            if include_patterns[idx].startswith("*"):
-                include_patterns[idx] = str(Path.cwd() / "**" / include_patterns[idx])
-            else:
-                include_patterns[idx] = str(
-                    Path.cwd() / include_patterns[idx].strip("/")
+        return folder
+
+    def _collect_local_folder_files(self, folder: Path, recursive: bool) -> list[Path]:
+        supported_file_types = {ext.lower() for ext in self._supported_file_types}
+        glob_pattern = "**/*" if recursive else "*"
+
+        files = []
+        for path in folder.glob(glob_pattern):
+            if not path.is_file():
+                continue
+
+            rel_parts = path.relative_to(folder).parts
+            if any(part.startswith(".") for part in rel_parts):
+                continue
+
+            if path.suffix.lower() not in supported_file_types:
+                continue
+
+            files.append(path)
+
+        return sorted(files, key=lambda item: item.relative_to(folder).as_posix())
+
+    def _source_names_for_local_files(
+        self, folder: Path, files: list[Path]
+    ) -> dict[Path, str]:
+        file_names = defaultdict(int)
+        for file_path in files:
+            file_names[file_path.name] += 1
+
+        return {
+            file_path: (
+                file_path.relative_to(folder).as_posix()
+                if file_names[file_path.name] > 1
+                else file_path.name
+            )
+            for file_path in files
+        }
+
+    def _validate_local_folder_files(self, files: list[Path]) -> list[str]:
+        return self.validate_files([str(file_path) for file_path in files])
+
+    def _file_ids_for_source_names(
+        self, source_names: list[str], user_id
+    ) -> dict[str, str]:
+        if not source_names:
+            return {}
+
+        Source = self._index._resources["Source"]
+        unique_source_names = list(dict.fromkeys(source_names))
+        matches: dict[str, str] = {}
+        with Session(engine) as session:
+            for idx in range(0, len(unique_source_names), 500):
+                batch = unique_source_names[idx : idx + 500]
+                statement = select(Source).where(Source.name.in_(batch))
+                if self._index.config.get("private", False):
+                    statement = statement.where(Source.user == user_id)
+
+                matches.update(
+                    {
+                        source.name: source.id
+                        for (source,) in session.execute(statement).all()
+                    }
                 )
 
-        # clean up the exclude patterns
-        for idx in range(len(exclude_patterns)):
-            if exclude_patterns[idx].startswith("*"):
-                exclude_patterns[idx] = str(Path.cwd() / "**" / exclude_patterns[idx])
-            else:
-                exclude_patterns[idx] = str(
-                    Path.cwd() / exclude_patterns[idx].strip("/")
+        return matches
+
+    def _upsert_directory_groups(
+        self,
+        folder: Path,
+        files: list[Path],
+        source_names_by_path: dict[Path, str],
+        file_ids_by_source_name: dict[str, str],
+        user_id,
+    ) -> list[str]:
+        groups: dict[str, list[str]] = defaultdict(list)
+        for file_path in files:
+            source_name = source_names_by_path[file_path]
+            file_id = file_ids_by_source_name.get(source_name)
+            if not file_id:
+                continue
+
+            parent = file_path.parent.relative_to(folder)
+            group_name = folder.name if str(parent) == "." else parent.as_posix()
+            groups[group_name].append(file_id)
+
+        if not groups:
+            return []
+
+        FileGroup = self._index._resources["FileGroup"]
+        messages = []
+        with Session(engine) as session:
+            for group_name, file_ids in groups.items():
+                unique_file_ids = list(dict.fromkeys(file_ids))
+                current_group = (
+                    session.query(FileGroup)
+                    .filter_by(name=group_name, user=user_id)
+                    .first()
                 )
 
-        # get the files
-        files: list[str] = [str(p) for p in Path(folder_path).glob("**/*.*")]
-        if include_patterns:
-            for p in include_patterns:
-                files = fnmatch.filter(names=files, pat=p)
+                if current_group:
+                    current_group.data["files"] = unique_file_ids
+                    messages.append(
+                        f"Updated group '{group_name}' with {len(unique_file_ids)} files"
+                    )
+                else:
+                    current_group = FileGroup(
+                        name=group_name,
+                        data={"files": unique_file_ids},  # type: ignore
+                        user=user_id,
+                    )
+                    session.add(current_group)
+                    messages.append(
+                        f"Created group '{group_name}' with {len(unique_file_ids)} files"
+                    )
 
-        if exclude_patterns:
-            for p in exclude_patterns:
-                files = [f for f in files if not fnmatch.fnmatch(name=f, pat=p)]
+            session.commit()
 
-        yield from self.index_fn(files, [], reindex, settings, user_id)
+        return messages
+
+    def index_files_from_dir(
+        self,
+        folder_path,
+        recursive,
+        create_groups,
+        reindex,
+        settings,
+        user_id,
+    ) -> Generator[tuple[str, str], None, list[str]]:
+        """Index files from a server-local folder and optionally mirror folders as groups."""
+        folder = self._resolve_local_folder(folder_path)
+        files = self._collect_local_folder_files(folder, recursive)
+        if not files:
+            gr.Info("No supported files found in folder")
+            yield "", f"No supported files found in {folder}"
+            return []
+
+        errors = self._validate_local_folder_files(files)
+        if errors:
+            gr.Warning(", ".join(errors))
+            yield "", "\n".join(errors)
+            return []
+
+        source_names_by_path = self._source_names_for_local_files(folder, files)
+        existing_file_ids = self._file_ids_for_source_names(
+            list(source_names_by_path.values()), user_id
+        )
+        to_index = [
+            file_path
+            for file_path in files
+            if reindex or source_names_by_path[file_path] not in existing_file_ids
+        ]
+
+        outputs = [
+            f"Already indexed | {source_names_by_path[file_path]}"
+            for file_path in files
+            if not reindex and source_names_by_path[file_path] in existing_file_ids
+        ]
+        debugs = [
+            f"Found {len(files)} supported files in {folder}",
+            f"Indexing {len(to_index)} files",
+        ]
+        yield "\n".join(outputs), "\n".join(debugs)
+
+        if to_index:
+            gr.Info(f"Start indexing {len(to_index)} files...")
+            indexing_pipeline = self._index.get_indexing_pipeline(settings, user_id)
+            output_stream = indexing_pipeline.stream(
+                [str(file_path) for file_path in to_index],
+                reindex=reindex,
+                source_names=[
+                    source_names_by_path[file_path] for file_path in to_index
+                ],
+            )
+            try:
+                while True:
+                    response = next(output_stream)
+                    if response is None:
+                        continue
+                    if response.channel == "index":
+                        if response.content["status"] == "success":
+                            outputs.append(f"\u2705 | {response.content['file_name']}")
+                        elif response.content["status"] == "failed":
+                            outputs.append(
+                                f"\u274c | {response.content['file_name']}: "
+                                f"{response.content['message']}"
+                            )
+                    elif response.channel == "debug":
+                        debugs.append(response.text)
+                    yield "\n".join(outputs), "\n".join(debugs)
+            except StopIteration as e:
+                results, index_errors, docs = e.value
+            except Exception as e:
+                debugs.append(f"Error: {e}")
+                yield "\n".join(outputs), "\n".join(debugs)
+                return []
+        else:
+            results, index_errors = [], []
+
+        file_ids_by_source_name = self._file_ids_for_source_names(
+            list(source_names_by_path.values()), user_id
+        )
+        if create_groups:
+            debugs.extend(
+                self._upsert_directory_groups(
+                    folder,
+                    files,
+                    source_names_by_path,
+                    file_ids_by_source_name,
+                    user_id,
+                )
+            )
+            yield "\n".join(outputs), "\n".join(debugs)
+
+        n_successes = len([_ for _ in results if _])
+        if n_successes:
+            gr.Info(f"Successfully indexed {n_successes} files")
+        n_errors = len([_ for _ in index_errors if _])
+        if n_errors:
+            gr.Warning(f"Have errors for {n_errors} files")
+
+        return list(file_ids_by_source_name.values())
 
     def format_size_human_readable(self, num: float | str, suffix="B"):
         try:
@@ -1455,9 +1682,11 @@ class FileIndexPage(BasePage):
                     file_id_to_name.get(file_id, "-") for file_id in item["files"]
                 ]
                 item["files"] = ", ".join(
-                    f"'{it[:MAX_FILENAME_LENGTH]}..'"
-                    if len(it) > MAX_FILENAME_LENGTH
-                    else f"'{it}'"
+                    (
+                        f"'{it[:MAX_FILENAME_LENGTH]}..'"
+                        if len(it) > MAX_FILENAME_LENGTH
+                        else f"'{it}'"
+                    )
                     for it in file_names
                 )
                 item_count = len(file_names)

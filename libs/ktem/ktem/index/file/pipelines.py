@@ -461,16 +461,21 @@ class IndexPipeline(BaseComponent):
                 session.add_all(nodes)
                 session.commit()
 
-    def get_id_if_exists(self, file_path: str | Path) -> Optional[str]:
+    def get_id_if_exists(
+        self, file_path: str | Path, source_name: Optional[str] = None
+    ) -> Optional[str]:
         """Check if the file is already indexed
 
         Args:
             file_path: the path to the file
+            source_name: the display/source name stored in the index
 
         Returns:
             the file id if the file is indexed, otherwise None
         """
-        file_name = file_path.name if isinstance(file_path, Path) else file_path
+        file_name = source_name or (
+            file_path.name if isinstance(file_path, Path) else file_path
+        )
         if self.private:
             cond: tuple = (
                 self.Source.name == file_name,
@@ -510,11 +515,12 @@ class IndexPipeline(BaseComponent):
 
         return file_id
 
-    def store_file(self, file_path: Path) -> str:
+    def store_file(self, file_path: Path, source_name: Optional[str] = None) -> str:
         """Store file into the database and storage, return the file id
 
         Args:
             file_path: the path to the file
+            source_name: the display/source name stored in the index
 
         Returns:
             the file id
@@ -524,7 +530,7 @@ class IndexPipeline(BaseComponent):
 
         shutil.copy(file_path, self.FSPath / file_hash)
         source = self.Source(
-            name=file_path.name,
+            name=source_name or file_path.name,
             path=file_hash,
             size=file_path.stat().st_size,
             user=self.user_id,  # type: ignore
@@ -600,13 +606,17 @@ class IndexPipeline(BaseComponent):
         raise NotImplementedError
 
     def stream(
-        self, file_path: str | Path, reindex: bool, **kwargs
+        self,
+        file_path: str | Path,
+        reindex: bool,
+        source_name: Optional[str] = None,
+        **kwargs,
     ) -> Generator[Document, None, tuple[str, list[Document]]]:
         # check if the file is already indexed
         if isinstance(file_path, Path):
             file_path = file_path.resolve()
 
-        file_id = self.get_id_if_exists(file_path)
+        file_id = self.get_id_if_exists(file_path, source_name=source_name)
 
         if isinstance(file_path, Path):
             if file_id is not None:
@@ -618,13 +628,14 @@ class IndexPipeline(BaseComponent):
                 else:
                     # remove the existing records
                     yield Document(
-                        f" => Removing old {file_path.name}", channel="debug"
+                        f" => Removing old {source_name or file_path.name}",
+                        channel="debug",
                     )
                     self.delete_file(file_id)
-                    file_id = self.store_file(file_path)
+                    file_id = self.store_file(file_path, source_name=source_name)
             else:
                 # add record to db
-                file_id = self.store_file(file_path)
+                file_id = self.store_file(file_path, source_name=source_name)
         else:
             if file_id is not None:
                 raise ValueError(f"URL {file_path} already indexed.")
@@ -635,7 +646,8 @@ class IndexPipeline(BaseComponent):
         # extract the file
         if isinstance(file_path, Path):
             extra_info = default_file_metadata_func(str(file_path))
-            file_name = file_path.name
+            file_name = source_name or file_path.name
+            extra_info["file_name"] = file_name
         else:
             extra_info = {"file_name": file_path}
             file_name = file_path
@@ -758,7 +770,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
                 chunk_size=chunk_size or 1024,
                 chunk_overlap=chunk_overlap or 256,
                 separator="\n\n",
-                backup_separators=["\n", ".", "\u200B"],
+                backup_separators=["\n", ".", "\u200b"],
             ),
             run_embedding_in_thread=self.run_embedding_in_thread,
             Source=self.Source,
@@ -779,7 +791,11 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
         raise NotImplementedError
 
     def stream(
-        self, file_paths: str | Path | list[str | Path], reindex: bool = False, **kwargs
+        self,
+        file_paths: str | Path | list[str | Path],
+        reindex: bool = False,
+        source_names: Optional[list[str | None]] = None,
+        **kwargs,
     ) -> Generator[
         Document, None, tuple[list[str | None], list[str | None], list[Document]]
     ]:
@@ -787,17 +803,22 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
         if not isinstance(file_paths, list):
             file_paths = [file_paths]
 
+        if source_names is None:
+            source_names = [None] * len(file_paths)
+        elif len(source_names) != len(file_paths):
+            raise ValueError("source_names must match file_paths length")
+
         file_ids: list[str | None] = []
         errors: list[str | None] = []
         all_docs = []
 
         n_files = len(file_paths)
-        for idx, file_path in enumerate(file_paths):
+        for idx, (file_path, source_name) in enumerate(zip(file_paths, source_names)):
             if self.is_url(file_path):
                 file_name = file_path
             else:
                 file_path = Path(file_path)
-                file_name = file_path.name
+                file_name = source_name or file_path.name
 
             yield Document(
                 content=f"Indexing [{idx + 1}/{n_files}]: {file_name}",
@@ -807,7 +828,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
             try:
                 pipeline = self.route(file_path)
                 file_id, docs = yield from pipeline.stream(
-                    file_path, reindex=reindex, **kwargs
+                    file_path, reindex=reindex, source_name=source_name, **kwargs
                 )
                 all_docs.extend(docs)
                 file_ids.append(file_id)
