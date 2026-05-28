@@ -1851,8 +1851,8 @@ class FileSelector(BasePage):
 
     def default(self):
         if self._app.f_user_management:
-            return "disabled", [], -1
-        return "disabled", [], 1
+            return "all", [], None
+        return "all", [], "default"
 
     def on_building_ui(self):
         default_mode, default_selector, user_id = self.default()
@@ -1965,11 +1965,15 @@ class FileSelector(BasePage):
 
         return gr.update(value=selected_files, choices=options), options
 
+    def load_files_for_user(self, selected_files, user_id):
+        selector, choices = self.load_files(selected_files, user_id)
+        return selector, choices, user_id
+
     def _on_app_created(self):
         self._app.app.load(
-            self.load_files,
+            self.load_files_for_user,
             inputs=[self.selector, self._app.user_id],
-            outputs=[self.selector, self.selector_choices],
+            outputs=[self.selector, self.selector_choices, self.selector_user_id],
         )
 
     def on_subscribe_public_events(self):
@@ -1987,9 +1991,13 @@ class FileSelector(BasePage):
                 self._app.subscribe_event(
                     name=event_name,
                     definition={
-                        "fn": self.load_files,
+                        "fn": self.load_files_for_user,
                         "inputs": [self.selector, self._app.user_id],
-                        "outputs": [self.selector, self.selector_choices],
+                        "outputs": [
+                            self.selector,
+                            self.selector_choices,
+                            self.selector_user_id,
+                        ],
                         "show_progress": "hidden",
                     },
                 )
