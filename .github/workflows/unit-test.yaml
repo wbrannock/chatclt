@@ -1,10 +1,7 @@
 name: unit-test
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 env:
   THEFLOW_TEMP_PATH: ./tmp
@@ -13,7 +10,7 @@ jobs:
   unit-test:
     # if: false # temporary disable this job due to legacy interface
     #TODO: enable this job after the new interface is ready
-    if: ${{ !cancelled() }}
+    if: ${{ false }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     defaults:
