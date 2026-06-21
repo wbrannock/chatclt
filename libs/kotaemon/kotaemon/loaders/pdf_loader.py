@@ -11,6 +11,12 @@ from PIL import Image
 from kotaemon.base import Document
 
 PDF_LOADER_DPI = config("PDF_LOADER_DPI", default=40, cast=int)
+# Generating a thumbnail per page (rendering each PDF page to a PNG) is the most
+# expensive part of loading and roughly doubles the number of docs to embed.
+# Set PDF_LOADER_GENERATE_THUMBNAILS=False to skip it and speed up indexing.
+PDF_LOADER_GENERATE_THUMBNAILS = config(
+    "PDF_LOADER_GENERATE_THUMBNAILS", default=True, cast=bool
+)
 
 
 def get_page_thumbnails(
@@ -94,6 +100,10 @@ class PDFThumbnailReader(PDFReader):
         page_numbers = list(range(len(page_numbers_str)))
 
         print("Page numbers:", len(page_numbers))
+
+        if not PDF_LOADER_GENERATE_THUMBNAILS:
+            return documents
+
         page_thumbnails = get_page_thumbnails(file, page_numbers)
 
         documents.extend(
