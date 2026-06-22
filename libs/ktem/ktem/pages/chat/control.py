@@ -359,7 +359,17 @@ class ConversationControl(BasePage):
             if isinstance(index.selector, int):
                 indices.append(selected.get(str(index.id), index.default_selector))
             if isinstance(index.selector, tuple):
-                indices.extend(selected.get(str(index.id), index.default_selector))
+                index_selection = list(
+                    selected.get(str(index.id), index.default_selector)
+                )
+                # The file selector keeps its user_id as the last component.
+                # Saved/default state can carry a stale None there (the default
+                # selector has no user at UI-build time), which makes
+                # get_selected_ids() return no files and silently disables
+                # retrieval. Always sync it to the active user on load.
+                if index_selection and user_id is not None:
+                    index_selection[-1] = user_id
+                indices.extend(index_selection)
 
         return (
             id_,
