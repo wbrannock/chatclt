@@ -59,11 +59,18 @@ def convert_image_to_base64(img: Image.Image) -> str:
 class PDFThumbnailReader(PDFReader):
     """PDF parser with thumbnail for each page."""
 
-    def __init__(self) -> None:
+    no_thumbnails: bool = False
+
+    def __init__(self, no_thumbnails: bool = False) -> None:
         """
         Initialize PDFReader.
+
+        Args:
+            no_thumbnails (bool): if True, skip per-page thumbnail generation
+                (faster embedding for large document sets).
         """
         super().__init__(return_full_document=False)
+        self.no_thumbnails = no_thumbnails
 
     def load_data(
         self,
@@ -73,6 +80,10 @@ class PDFThumbnailReader(PDFReader):
     ) -> List[Document]:
         """Parse file."""
         documents = super().load_data(file, extra_info, fs)
+
+        if self.no_thumbnails:
+            # Skip thumbnail generation: return plain per-page text docs only.
+            return documents
 
         page_numbers_str = []
         filtered_docs = []

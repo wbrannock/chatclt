@@ -45,6 +45,7 @@ from kotaemon.indices.ingests.files import (
     web_reader,
 )
 from kotaemon.indices.rankings import BaseReranking, LLMReranking, LLMTrulensScoring
+from kotaemon.loaders import PDFThumbnailReader
 from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
@@ -679,10 +680,11 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
     """
 
     reader_mode: str = Param("default", help="The reader mode")
+    no_thumbnails: bool = Param(False, help="Skip PDF page thumbnail generation")
     embedding: BaseEmbeddings
     run_embedding_in_thread: bool = False
 
-    @Param.auto(depends_on="reader_mode")
+    @Param.auto(depends_on=["reader_mode", "no_thumbnails"])
     def readers(self):
         readers = deepcopy(KH_DEFAULT_FILE_EXTRACTORS)
         print("reader_mode", self.reader_mode)
@@ -692,6 +694,9 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
             readers[".pdf"] = azure_reader
         elif self.reader_mode == "docling":
             readers[".pdf"] = docling_reader
+        else:
+            # default open-source reader: honor the thumbnail toggle
+            readers[".pdf"] = PDFThumbnailReader(no_thumbnails=self.no_thumbnails)
 
         dev_readers, _, _ = dev_settings()
         readers.update(dev_readers)
@@ -715,6 +720,11 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
                 ],
                 "component": "dropdown",
             },
+            "no_thumbnails": {
+                "name": "Skip PDF page thumbnails (faster embedding)",
+                "value": False,
+                "component": "checkbox",
+            },
         }
 
     @classmethod
@@ -729,6 +739,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
             ],
             run_embedding_in_thread=use_quick_index_mode,
             reader_mode=user_settings.get("reader_mode", "default"),
+            no_thumbnails=user_settings.get("no_thumbnails", False),
         )
         return obj
 
