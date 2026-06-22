@@ -31,6 +31,7 @@ from kotaemon.indices.qa.citation_qa import (
 from kotaemon.indices.qa.citation_qa_inline import AnswerWithInlineCitation
 from kotaemon.indices.qa.format_context import PrepareEvidencePipeline
 from kotaemon.indices.qa.utils import replace_think_tag_with_details
+from kotaemon.indices.rankings import LLMReranking
 from kotaemon.llms import ChatLLM
 
 from ..utils import SUPPORTED_LANGUAGE_MAP
@@ -352,6 +353,18 @@ class FullQAPipeline(BaseReasoning):
         prefix = f"reasoning.options.{cls.get_info()['id']}"
         llm_name = settings.get(f"{prefix}.llm", None)
         llm = llms.get(llm_name, llms.get_default())
+
+        # Make per-chunk relevance scoring and LLM reranking use the selected
+        # chat model. These otherwise fall back to the separate reranking_llm
+        # setting (default model), so a non-selected model (e.g. the default)
+        # would be called ~once per retrieved chunk on every query.
+        for retriever in retrievers:
+            scorer = getattr(retriever, "llm_scorer", None)
+            if scorer is not None and hasattr(scorer, "llm"):
+                scorer.llm = llm
+            for reranker in getattr(retriever, "rerankers", None) or []:
+                if isinstance(reranker, LLMReranking):
+                    reranker.llm = llm
 
         # prepare evidence pipeline configuration
         evidence_pipeline = pipeline.evidence_pipeline
