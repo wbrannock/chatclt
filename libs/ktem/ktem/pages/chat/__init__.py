@@ -10,6 +10,7 @@ from ktem.app import BasePage
 from ktem.components import reasonings
 from ktem.db.models import Conversation, engine
 from ktem.index.file.ui import File
+from ktem.llms.manager import llms
 from ktem.reasoning.prompt_optimization.mindmap import MINDMAP_HTML_EXPORT_TEMPLATE
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
     SuggestConvNamePipeline,
@@ -484,7 +485,12 @@ class ChatPage(BasePage):
             )
             .success(
                 fn=self.check_and_suggest_name_conv,
-                inputs=self.chat_panel.chatbot,
+                inputs=[
+                    self.chat_panel.chatbot,
+                    self._app.settings_state,
+                    self._reasoning_type,
+                    self.model_type,
+                ],
                 outputs=[
                     self.chat_control.conversation_rn,
                     self._conversation_renamed,
@@ -514,6 +520,8 @@ class ChatPage(BasePage):
                 self.language,
                 self.chat_panel.chatbot,
                 self._use_suggestion,
+                self._reasoning_type,
+                self.model_type,
             ],
             "outputs": [
                 self.followup_questions_ui,
@@ -1367,8 +1375,31 @@ class ChatPage(BasePage):
                 chat_state,
             )
 
-    def check_and_suggest_name_conv(self, chat_history):
+    def _get_selected_llm(self, settings, session_reasoning_type, session_llm):
+        """Resolve the LLM the user currently has selected, mirroring the logic
+        in create_pipeline(). Used so auxiliary calls (conversation naming,
+        follow-up suggestions) run on the chosen model instead of the default."""
+        reasoning_mode = (
+            settings["reasoning.use"]
+            if session_reasoning_type in (DEFAULT_SETTING, None)
+            else session_reasoning_type
+        )
+        try:
+            reasoning_id = reasonings[reasoning_mode].get_info()["id"]
+        except KeyError:
+            reasoning_id = reasoning_mode
+        llm_name = settings.get(f"reasoning.options.{reasoning_id}.llm", None)
+        if session_llm not in (DEFAULT_SETTING, None, ""):
+            llm_name = session_llm
+        return llms.get(llm_name, llms.get_default())
+
+    def check_and_suggest_name_conv(
+        self, chat_history, settings, session_reasoning_type, session_llm
+    ):
         suggest_pipeline = SuggestConvNamePipeline()
+        suggest_pipeline.llm = self._get_selected_llm(
+            settings, session_reasoning_type, session_llm
+        )
         new_name = gr.update()
         renamed = False
 
@@ -1388,6 +1419,8 @@ class ChatPage(BasePage):
         session_language,
         chat_history,
         use_suggestion,
+        session_reasoning_type,
+        session_llm,
     ):
         target_language = (
             session_language
@@ -1396,6 +1429,9 @@ class ChatPage(BasePage):
         )
         if use_suggestion:
             suggest_pipeline = SuggestFollowupQuesPipeline()
+            suggest_pipeline.llm = self._get_selected_llm(
+                settings, session_reasoning_type, session_llm
+            )
             suggest_pipeline.lang = SUPPORTED_LANGUAGE_MAP.get(
                 target_language, "English"
             )

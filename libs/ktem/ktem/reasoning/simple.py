@@ -367,6 +367,7 @@ class FullQAPipeline(BaseReasoning):
 
         answer_pipeline.llm = llm
         answer_pipeline.citation_pipeline.llm = llm
+        answer_pipeline.create_mindmap_pipeline.llm = llm
         answer_pipeline.n_last_interactions = settings[f"{prefix}.n_last_interactions"]
         answer_pipeline.enable_citation = (
             settings[f"{prefix}.highlight_citation"] != "off"
