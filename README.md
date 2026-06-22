@@ -207,5 +207,12 @@ uv sync                        # resync after a merge that touches deps
 - **401 from OpenRouter** — your key is wrong, or you left `OPENAI_API_BASE` pointed at `api.openai.com`. Both need to match step 3.
 - **Slow / repeated indexing** — make sure `ktem_app_data/` exists and is writable; deleting it forces a full reindex.
 - **Lockfile conflicts on merge** — don't hand-edit `uv.lock`. Accept one side of the merge, then run `uv lock` to regenerate cleanly.
+- **Chat hangs with no answer / uploads never finish indexing** — if the terminal prints up to `Retrievers [...]` (or stalls during indexing right after `Got N page thumbnails`) and nothing else comes back, suspect a **stale `theflow` cache lock**. Every pipeline call (query *and* indexing) acquires a cross-process `diskcache` RLock under the key `__lock__` in `<tempdir>/theflow_<user>/cache`. If the app (or a worker) is force-killed mid-request, that lock is left held by a dead PID and every later call spins forever. Fix it by clearing the lock:
+
+  ```bash
+  uv run python -c "import diskcache; from theflow.utils.paths import temp_path; from pathlib import Path; diskcache.Cache(str(Path(temp_path(), 'cache'))).delete('__lock__'); print('cleared')"
+  ```
+
+  Or, with the app stopped, delete the whole cache dir (it's only a cache and is rebuilt automatically): `rm -rf "$(uv run python -c "from theflow.utils.paths import temp_path; from pathlib import Path; print(Path(temp_path(), 'cache'))")"`. To check whether the lock is actually stale, read it — a dead PID with count ≥ 1 confirms it: `uv run python -c "import diskcache; from theflow.utils.paths import temp_path; from pathlib import Path; print(diskcache.Cache(str(Path(temp_path(), 'cache'))).get('__lock__'))"`. After clearing, re-upload any file whose indexing was interrupted (a source can show in the UI with 0 chunks). Avoid hard-killing the app mid-request to prevent recurrence.
 
 Questions → ping the team chat. Bugs in our customizations → open an issue on this repo.
