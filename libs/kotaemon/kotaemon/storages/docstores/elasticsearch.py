@@ -100,6 +100,11 @@ class ElasticsearchDocumentStore(BaseDocumentStore):
         if refresh_indices:
             self.client.indices.refresh(index=self.index_name)
 
+    def build_index(self):
+        """Force an index refresh once after a bulk add (used when adds were
+        issued with ``refresh_indices=False``)."""
+        self.client.indices.refresh(index=self.index_name)
+
     def query_raw(self, query: dict) -> List[Document]:
         """Query Elasticsearch store using query format of ES client
 
@@ -159,14 +164,15 @@ class ElasticsearchDocumentStore(BaseDocumentStore):
         query_dict = {"query": {"match_all": {}}, "size": MAX_DOCS_TO_GET}
         return self.query_raw(query_dict)
 
-    def delete(self, ids: Union[List[str], str]):
+    def delete(self, ids: Union[List[str], str], refresh_indices: bool = True, **kwargs):
         """Delete document by id"""
         if not isinstance(ids, list):
             ids = [ids]
 
         query = {"query": {"terms": {"_id": ids}}}
         self.client.delete_by_query(index=self.index_name, body=query)
-        self.client.indices.refresh(index=self.index_name)
+        if refresh_indices:
+            self.client.indices.refresh(index=self.index_name)
 
     def drop(self):
         """Drop the document store"""

@@ -413,9 +413,15 @@ class IndexPipeline(BaseComponent):
         # run vector indexing in thread if specified
         if self.run_embedding_in_thread:
             print("Running embedding in thread")
-            threading.Thread(
+            thread = threading.Thread(
                 target=lambda: list(insert_chunks_to_vectorstore())
-            ).start()
+            )
+            thread.start()
+            # Register the thread so the batch can join it before compacting
+            # the vector store (see IndexDocumentPipeline.finalize_indexing).
+            threads = getattr(self, "_indexing_threads", None)
+            if threads is not None:
+                threads.append(thread)
         else:
             yield from insert_chunks_to_vectorstore()
 
@@ -424,8 +430,10 @@ class IndexPipeline(BaseComponent):
 
     def handle_chunks_docstore(self, chunks, file_id):
         """Run chunks"""
-        # run embedding, add to both vector store and doc store
-        self.vector_indexing.add_to_docstore(chunks)
+        # Defer the (expensive) full-text index rebuild: indexing many files
+        # would otherwise rebuild the whole FTS index on every batch. The
+        # index is built once at the end of the batch via finalize_indexing().
+        self.vector_indexing.add_to_docstore(chunks, refresh_indices=False)
 
         # record in the index
         with Session(engine) as session:
@@ -599,7 +607,9 @@ class IndexPipeline(BaseComponent):
         if vs_ids and self.VS:
             self.VS.delete(vs_ids)
         if ds_ids:
-            self.DS.delete(ds_ids)
+            # Defer the FTS index rebuild: delete_file only runs as part of a
+            # reindex batch, which rebuilds the index once via finalize_indexing.
+            self.DS.delete(ds_ids, refresh_indices=False)
 
     def run(
         self, file_path: str | Path, reindex: bool, **kwargs
@@ -823,6 +833,10 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
         errors: list[str | None] = []
         all_docs = []
 
+        # Shared across the per-file pipelines so we can join any background
+        # embedding threads before compacting the stores in finalize_indexing.
+        indexing_threads: list[threading.Thread] = []
+
         n_files = len(file_paths)
         for idx, (file_path, source_name) in enumerate(zip(file_paths, source_names)):
             if self.is_url(file_path):
@@ -838,6 +852,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
 
             try:
                 pipeline = self.route(file_path)
+                object.__setattr__(pipeline, "_indexing_threads", indexing_threads)
                 file_id, docs = yield from pipeline.stream(
                     file_path, reindex=reindex, source_name=source_name, **kwargs
                 )
@@ -866,4 +881,32 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
                     channel="index",
                 )
 
+        # Wait for any background embedding threads to finish, then build the
+        # search index and compact the stores once for the whole batch.
+        for thread in indexing_threads:
+            thread.join()
+
+        if any(file_id is not None for file_id in file_ids):
+            yield Document(" => Finalizing index", channel="debug")
+            self.finalize_indexing()
+
         return file_ids, errors, all_docs
+
+    def finalize_indexing(self):
+        """Build the doc-store search index and compact both stores once, after
+        a (potentially large) batch of files has been added.
+
+        Per-file writes defer the full-text index rebuild (refresh_indices=False)
+        and accumulate many small on-disk fragments. Doing the rebuild + compaction
+        a single time here avoids the quadratic per-batch FTS rebuild and the
+        LanceDB file explosion. Best-effort: failures are logged, not raised."""
+        try:
+            if self.DS:
+                self.DS.build_index()
+        except Exception as e:
+            logger.warning(f"Doc store finalize_indexing failed: {e}")
+        try:
+            if self.VS:
+                self.VS.optimize()
+        except Exception as e:
+            logger.warning(f"Vector store finalize_indexing failed: {e}")

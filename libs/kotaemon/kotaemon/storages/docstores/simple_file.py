@@ -49,7 +49,7 @@ class SimpleFileDocumentStore(InMemoryDocumentStore):
         super().add(docs=docs, ids=ids, **kwargs)
         self.save(self._save_path)
 
-    def delete(self, ids: Union[List[str], str]):
+    def delete(self, ids: Union[List[str], str], **kwargs):
         """Delete document by id"""
         super().delete(ids=ids)
         self.save(self._save_path)

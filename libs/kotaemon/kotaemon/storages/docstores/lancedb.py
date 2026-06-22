@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from typing import List, Optional, Union
 
 from kotaemon.base import Document
@@ -59,6 +60,30 @@ class LanceDBDocumentStore(BaseDocumentStore):
                 replace=True,
             )
 
+    def build_index(self):
+        """(Re)build the full-text search index and compact the table.
+
+        Intended to be called once after a bulk add/delete (passing
+        ``refresh_indices=False`` to those calls) instead of rebuilding the FTS
+        index on every write. Rebuilding the index per write is roughly
+        quadratic over a large folder upload, while ``optimize`` also compacts
+        the many small data fragments and prunes old table versions that each
+        write leaves behind.
+        """
+        if self.collection_name not in self.db_connection.table_names():
+            return
+
+        document_collection = self.db_connection.open_table(self.collection_name)
+        document_collection.create_fts_index(
+            "text",
+            tokenizer_name="en_stem",
+            replace=True,
+        )
+        try:
+            document_collection.optimize(cleanup_older_than=timedelta(0))
+        except Exception as e:  # pragma: no cover - optimize is best-effort
+            print(f"[LanceDBDocumentStore] optimize skipped: {e}")
+
     def query(
         self, query: str, top_k: int = 10, doc_ids: Optional[list] = None
     ) -> List[Document]:
@@ -84,6 +109,14 @@ class LanceDBDocumentStore(BaseDocumentStore):
                 )
         except (ValueError, FileNotFoundError):
             docs = []
+        except RuntimeError as e:
+            # FTS index not built yet (e.g. queried mid-bulk-index, before
+            # build_index() runs). Treat as no full-text results rather than
+            # crashing the query.
+            if "full text search" in str(e).lower() or "inverted index" in str(e).lower():
+                docs = []
+            else:
+                raise
         return [
             Document(
                 id_=doc["id"],

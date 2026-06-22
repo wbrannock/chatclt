@@ -66,6 +66,12 @@ class BaseVectorStore(ABC):
         """
         ...
 
+    def optimize(self):
+        """Compact storage after bulk writes (e.g. merge data fragments and
+        prune old versions). No-op by default; stores that accumulate on-disk
+        fragments per write should override this."""
+        pass
+
     @abstractmethod
     def drop(self):
         """Drop the vector store"""

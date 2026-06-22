@@ -56,7 +56,7 @@ class InMemoryDocumentStore(BaseDocumentStore):
         """Count number of documents"""
         return len(self._store)
 
-    def delete(self, ids: Union[List[str], str]):
+    def delete(self, ids: Union[List[str], str], **kwargs):
         """Delete document by id"""
         if not isinstance(ids, list):
             ids = [ids]

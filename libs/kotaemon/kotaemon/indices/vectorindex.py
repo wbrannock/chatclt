@@ -76,10 +76,10 @@ class VectorIndexing(BaseIndexing):
                 ) as f:
                     f.write(markdown_content)
 
-    def add_to_docstore(self, docs: list[Document]):
+    def add_to_docstore(self, docs: list[Document], refresh_indices: bool = True):
         if self.doc_store:
             print("Adding documents to doc store")
-            self.doc_store.add(docs)
+            self.doc_store.add(docs, refresh_indices=refresh_indices)
 
     def add_to_vectorstore(self, docs: list[Document]):
         # in case we want to skip embedding

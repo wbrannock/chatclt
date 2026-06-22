@@ -26,6 +26,12 @@ class BaseDocumentStore(ABC):
         """
         ...
 
+    def build_index(self):
+        """Finalize indexing after bulk writes (e.g. rebuild a search index
+        and/or compact storage). No-op by default; stores that maintain an
+        on-disk index should override this."""
+        pass
+
     @abstractmethod
     def get(self, ids: Union[List[str], str]) -> List[Document]:
         """Get document by id"""
@@ -49,7 +55,7 @@ class BaseDocumentStore(ABC):
         ...
 
     @abstractmethod
-    def delete(self, ids: Union[List[str], str]):
+    def delete(self, ids: Union[List[str], str], **kwargs):
         """Delete document by id"""
         ...
 

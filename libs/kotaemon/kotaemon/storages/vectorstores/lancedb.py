@@ -49,7 +49,10 @@ class LanceDBVectorStore(LlamaIndexVectorStore):
         db_connection = lancedb.connect(path)  # type: ignore
         try:
             table = db_connection.open_table(collection_name)
-        except FileNotFoundError:
+        except (FileNotFoundError, ValueError):
+            # Newer lancedb raises ValueError ("Table '...' was not found")
+            # instead of FileNotFoundError when the collection doesn't exist
+            # yet (e.g. a brand-new index). Fall back to lazy creation.
             table = None
 
         self._kwargs = kwargs
@@ -72,6 +75,26 @@ class LanceDBVectorStore(LlamaIndexVectorStore):
             kwargs: meant for vectorstore-specific parameters
         """
         self._client.delete_nodes(ids)
+
+    def optimize(self):
+        """Compact data fragments and prune old table versions.
+
+        Each ``add`` writes a new Lance fragment and table version; without
+        compaction a large folder upload leaves thousands of small files on
+        disk. Run once after a bulk upload. Best-effort: failures are logged
+        and swallowed so they never abort indexing."""
+        from datetime import timedelta
+
+        try:
+            import lancedb
+
+            db = lancedb.connect(self._path)  # type: ignore
+            if self._collection_name in db.table_names():
+                db.open_table(self._collection_name).optimize(
+                    cleanup_older_than=timedelta(0)
+                )
+        except Exception as e:  # pragma: no cover - optimize is best-effort
+            print(f"[LanceDBVectorStore] optimize skipped: {e}")
 
     def drop(self):
         """Delete entire collection from vector stores"""
