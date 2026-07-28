@@ -156,7 +156,6 @@ chatclt/
 ├── uv.lock                   # locked dep versions 
 ├── .python-version           # pins Python 3.11
 ├── README.md                 # you are here
-├── START_HERE.md             # quick start cheatsheet
 ├── .env.example              # template for .env
 ├── libs/
 │   ├── kotaemon/             # RAG engine (upstream, editable workspace member)
