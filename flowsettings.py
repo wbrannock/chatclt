@@ -7,6 +7,10 @@ from decouple import config
 from ktem.utils.lang import SUPPORTED_LANGUAGE_MAP
 from theflow.settings.default import *  # noqa
 
+# The app forks worker processes after HF tokenizers (fastembed, cross-encoder)
+# have run; without this the tokenizers library spams deadlock warnings.
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 cur_frame = currentframe()
 if cur_frame is None:
     raise ValueError("Cannot get the current frame.")
@@ -150,12 +154,13 @@ OPENAI_API_BASE = config("OPENAI_API_BASE", default="") or "https://api.openai.c
 OPENROUTER_LOCAL_MODEL_CANDIDATES = {
     # Curated May 27, 2026: open-weight models available on OpenRouter that are
     # also plausible to test locally via Ollama/llama.cpp in quantized form.
-    "openrouter-qwen3-14b": "qwen/qwen3-14b",
-    "openrouter-gemma-3-12b": "google/gemma-3-12b-it",
+    # The first three are the primary models of our evaluation.
     "openrouter-gemma-4-26b-a4b": "google/gemma-4-26b-a4b-it",
+    "openrouter-qwen3-14b": "qwen/qwen3-14b",
+    "openrouter-mistral-small-3.2-24b": "mistralai/mistral-small-3.2-24b-instruct",
+    "openrouter-gemma-3-12b": "google/gemma-3-12b-it",
     "openrouter-qwen3-30b-a3b": "qwen/qwen3-30b-a3b",
     "openrouter-qwen3-32b": "qwen/qwen3-32b",
-    "openrouter-mistral-small-3.2-24b": "mistralai/mistral-small-3.2-24b-instruct",
     "openrouter-mistral-nemo": "mistralai/mistral-nemo",
     "openrouter-llama-3.1-8b": "meta-llama/llama-3.1-8b-instruct",
     "openrouter-phi-4": "microsoft/phi-4",
@@ -217,39 +222,56 @@ if VOYAGE_API_KEY:
         "default": False,
     }
 
-if config("LOCAL_MODEL", default=""):
-    KH_LLMS["ollama"] = {
+# Local models served by Ollama. LOCAL_MODELS is a comma-separated list of Ollama
+# model tags (e.g. LOCAL_MODELS="gemma4:e4b,qwen3:4b-instruct"); LOCAL_MODEL is kept
+# as a single-model fallback for backwards compatibility.
+LOCAL_MODELS = [
+    name.strip()
+    for name in config(
+        "LOCAL_MODELS", default=config("LOCAL_MODEL", default="")
+    ).split(",")
+    if name.strip()
+]
+LOCAL_MODELS_DEFAULT = config("LOCAL_MODELS_DEFAULT", default=False, cast=bool)
+LOCAL_MODEL_CTX = config("LOCAL_MODEL_CTX", default=32768, cast=int)
+
+for _idx, _model_name in enumerate(LOCAL_MODELS):
+    _slug = "ollama-" + _model_name.replace(":", "-").replace("/", "-")
+    # OpenAI-compatible endpoint: supports streaming and tool calls (needed for
+    # highlight citations), but the context window is whatever the Ollama server
+    # runs with — set OLLAMA_CONTEXT_LENGTH when starting `ollama serve`.
+    KH_LLMS[_slug] = {
         "spec": {
             "__type__": "kotaemon.llms.ChatOpenAI",
+            "temperature": 0,
             "base_url": KH_OLLAMA_URL,
-            "model": config("LOCAL_MODEL", default="qwen2.5:7b"),
+            "model": _model_name,
             "api_key": "ollama",
         },
-        "default": False,
+        "default": LOCAL_MODELS_DEFAULT and _idx == 0,
     }
-    KH_LLMS["ollama-long-context"] = {
+    # Native-endpoint variant that pins the context window client-side, so long
+    # RAG evidence isn't silently truncated by the server's default num_ctx.
+    KH_LLMS[f"{_slug}-{LOCAL_MODEL_CTX // 1024}k"] = {
         "spec": {
             "__type__": "kotaemon.llms.LCOllamaChat",
             "base_url": KH_OLLAMA_URL.replace("v1/", ""),
-            "model": config("LOCAL_MODEL", default="qwen2.5:7b"),
-            "num_ctx": 8192,
+            "model": _model_name,
+            "num_ctx": LOCAL_MODEL_CTX,
         },
         "default": False,
     }
 
+# Ollama embeddings are opt-in via LOCAL_MODEL_EMBEDDINGS (e.g. "nomic-embed-text",
+# must be pulled first). FastEmbed below already runs locally and is the default,
+# so local-only setups work without this.
+if config("LOCAL_MODEL_EMBEDDINGS", default=""):
     KH_EMBEDDINGS["ollama"] = {
         "spec": {
             "__type__": "kotaemon.embeddings.OpenAIEmbeddings",
             "base_url": KH_OLLAMA_URL,
-            "model": config("LOCAL_MODEL_EMBEDDINGS", default="nomic-embed-text"),
+            "model": config("LOCAL_MODEL_EMBEDDINGS", default=""),
             "api_key": "ollama",
-        },
-        "default": False,
-    }
-    KH_EMBEDDINGS["fast_embed"] = {
-        "spec": {
-            "__type__": "kotaemon.embeddings.FastEmbedEmbeddings",
-            "model_name": "BAAI/bge-base-en-v1.5",
         },
         "default": False,
     }
@@ -257,14 +279,23 @@ if config("LOCAL_MODEL", default=""):
 # Removed unused LLM/embedding providers (claude, google, groq, cohere, mistral)
 # Only OpenAI (via OpenRouter) and FastEmbed are needed
 
-# Reranking is required by the retrieval pipeline
+# Reranking is required by the retrieval pipeline. The cross-encoder runs fully
+# locally (MPS/CUDA/CPU); Cohere is kept as an opt-in remote alternative and
+# skips itself gracefully when no API key is set.
+KH_RERANKINGS["cross-encoder"] = {
+    "spec": {
+        "__type__": "kotaemon.rerankings.CrossEncoderReranking",
+        "model_name": "BAAI/bge-reranker-base",
+    },
+    "default": True,
+}
 KH_RERANKINGS["cohere"] = {
     "spec": {
         "__type__": "kotaemon.rerankings.CohereReranking",
         "model_name": "rerank-v3.5",
         "cohere_api_key": config("COHERE_API_KEY", default=""),
     },
-    "default": True,
+    "default": False,
 }
 
 KH_REASONINGS = [

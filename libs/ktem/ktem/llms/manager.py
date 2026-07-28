@@ -23,15 +23,14 @@ class LLMManager:
             for name, model in flowsettings.KH_LLMS.items():
                 with Session(engine) as session:
                     stmt = select(LLMTable).where(LLMTable.name == name)
-                    result = session.execute(stmt)
-                    if not result.first():
-                        item = LLMTable(
-                            name=name,
-                            spec=model["spec"],
-                            default=model.get("default", False),
-                        )
-                        session.add(item)
-                        session.commit()
+                    if session.execute(stmt).first():
+                        continue
+                # add() demotes existing defaults when this model is default
+                self.add(
+                    name=name,
+                    spec=model["spec"],
+                    default=model.get("default", False),
+                )
 
         self.load()
         self.load_vendors()

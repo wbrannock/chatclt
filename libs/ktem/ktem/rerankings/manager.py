@@ -19,17 +19,19 @@ class RerankingManager:
         self._default: str = ""
         self._vendors: list[Type] = []
 
-        # populate the pool if empty
+        # populate models from flowsettings that aren't in the database yet, so
+        # newly configured models appear without wiping existing state
         if hasattr(flowsettings, "KH_RERANKINGS"):
-            with Session(engine) as sess:
-                count = sess.query(RerankingTable).count()
-            if not count:
-                for name, model in flowsettings.KH_RERANKINGS.items():
-                    self.add(
-                        name=name,
-                        spec=model["spec"],
-                        default=model.get("default", False),
-                    )
+            for name, model in flowsettings.KH_RERANKINGS.items():
+                with Session(engine) as sess:
+                    stmt = select(RerankingTable).where(RerankingTable.name == name)
+                    if sess.execute(stmt).first():
+                        continue
+                self.add(
+                    name=name,
+                    spec=model["spec"],
+                    default=model.get("default", False),
+                )
 
         self.load()
         self.load_vendors()

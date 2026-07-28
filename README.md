@@ -1,14 +1,16 @@
-# chatclt — Capstone RAG Chat
+# chatclt — A RAG System for the UVA Pathology Department
+## UVA MSDS Capstone Project 2026
+### Team: Edward Anderson, William Brannock, Samuel Kunitz-Levy, Nathan Todd and Will Novak
 
-Our capstone project: a PDF-grounded chat app for querying a medical / laboratory literature corpus (pathology, immunology, hematology, clinical chemistry, molecular genetics, synthetic procedures). Built on a fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon) with our own UI theming, chat flow tweaks, and model defaults.
+ChatCLT: a PDF-grounded chat app for querying a medical / laboratory literature corpus (pathology, immunology, hematology, clinical chemistry, molecular genetics, synthetic procedures). Built on a fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon) with our own UI theming, local chat flow tweaks, and model defaults.
 
-- **Chat model**: `anthropic/claude-sonnet-4-6` via [OpenRouter](https://openrouter.ai) (one key, any model)
+- **Chat models**: Gemma 4 26B A4B, Qwen3 14B, and Mistral Small 3.2 24B — runnable locally via [Ollama](https://ollama.com) (see [Local models via Ollama](#local-models-via-ollama-fully-offline)) or remotely via [OpenRouter](https://openrouter.ai) (one key, any model; `anthropic/claude-sonnet-4-6` available as a strong-baseline reference). Our model evaluation used the OpenRouter API because we didn't have access to a machine with enough unified memory to serve them locally. The target deployment is fully local on a Mac mini that the pathology department has. 
+
 - **Embeddings**: FastEmbed `BAAI/bge-small-en-v1.5` — runs locally on CPU, no key needed
-- **Reranking**: off by default (optional Cohere key)
+- **Reranking**: local cross-encoder `BAAI/bge-reranker-base` (Apple Metal/CUDA/CPU, no key needed), on by default; optional Cohere rerank with a `COHERE_API_KEY`
+- **Relevance scoring**: optional per-chunk LLM scoring using the selected chat model (shown in the info panel; turn off for local models — see performance tip below)
 - **Vector store / index**: local, persisted in `ktem_app_data/` — survives restarts
 - **Auth**: local login, default `admin` / `admin`
-
-For upstream kotaemon documentation, see https://github.com/Cinnamon/kotaemon.
 
 ---
 
@@ -17,7 +19,8 @@ For upstream kotaemon documentation, see https://github.com/Cinnamon/kotaemon.
 - macOS or Linux (Apple Silicon works)
 - [uv](https://docs.astral.sh/uv/) — install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or `brew install uv`
 - Git
-- An **OpenRouter** API key — sign up at https://openrouter.ai/keys (free tier works to start; add credit for Claude Sonnet)
+- An **OpenRouter** API key — sign up at https://openrouter.ai/keys (free tier works to start; add credit to use remote models)
+- Optional: [Ollama](https://ollama.com) for running chat models fully locally (no API key) — see [Local models via Ollama](#local-models-via-ollama-fully-offline)
 
 uv manages Python itself — you do **not** need conda or a pre-installed Python. Disk: the venv is ~4 GB. Indexed PDFs add ~100 MB per few dozen files.
 
@@ -28,12 +31,6 @@ uv manages Python itself — you do **not** need conda or a pre-installed Python
 ```bash
 git clone https://github.com/wbrannock/chatclt.git
 cd chatclt
-```
-
-Optional — track the upstream kotaemon project so we can pull fixes:
-
-```bash
-git remote add upstream https://github.com/Cinnamon/kotaemon.git
 ```
 
 ## 2. Install dependencies with uv
@@ -62,7 +59,7 @@ You have two options for activation:
   python app.py
   ```
 
-To wipe and rebuild:
+To wipe and rebuild the virtual environment:
 
 ```bash
 rm -rf .venv
@@ -84,28 +81,42 @@ OPENAI_CHAT_MODEL=anthropic/claude-sonnet-4-6
 OPENAI_EMBEDDINGS_MODEL=text-embedding-3-large
 ```
 
-We're pointing the "OpenAI" variables at OpenRouter because OpenRouter is API-compatible — this lets us swap models (Claude, GPT, Llama, etc.) by changing one line. Embeddings still run locally via FastEmbed, so `OPENAI_EMBEDDINGS_MODEL` is just a placeholder.
+We're pointing the "OpenAI" variables at OpenRouter because OpenRouter is API-compatible. This lets us swap models (Claude, GPT, Llama, etc.) by changing one line. Embeddings still run locally via FastEmbed, so `OPENAI_EMBEDDINGS_MODEL` is just a placeholder.
 
-**`.env` is gitignored. Never commit it. Never share your key in Slack / commits / screenshots.**
+**`.env` is gitignored. Never commit it. Make sure to never share**
 
 Optional:
 - Reranking: add `COHERE_API_KEY=...` to `.env`
 - Different chat model: change `OPENAI_CHAT_MODEL` to any OpenRouter model id (e.g. `openai/gpt-4o-mini`, `meta-llama/llama-3.1-70b-instruct`)
 
-When `OPENAI_API_BASE` points at OpenRouter, ChatCLT also registers a curated set of open-weight model candidates in Chat settings so you can compare locally plausible models without editing `.env` for each run:
+### Local models via Ollama (fully offline)
 
-| UI option | OpenRouter model |
-| --- | --- |
-| `openrouter-qwen3-14b` | `qwen/qwen3-14b` |
-| `openrouter-gemma-3-12b` | `google/gemma-3-12b-it` |
-| `openrouter-gemma-4-26b-a4b` | `google/gemma-4-26b-a4b-it` |
-| `openrouter-qwen3-30b-a3b` | `qwen/qwen3-30b-a3b` |
-| `openrouter-qwen3-32b` | `qwen/qwen3-32b` |
-| `openrouter-mistral-small-3.2-24b` | `mistralai/mistral-small-3.2-24b-instruct` |
-| `openrouter-mistral-nemo` | `mistralai/mistral-nemo` |
-| `openrouter-llama-3.1-8b` | `meta-llama/llama-3.1-8b-instruct` |
-| `openrouter-phi-4` | `microsoft/phi-4` |
-| `openrouter-deepseek-r1-distill-qwen-32b` | `deepseek/deepseek-r1-distill-qwen-32b` |
+For running against local models (e.g. on the Mac mini deployment), install [Ollama](https://ollama.com), pull the models you want, and list them in `.env`. The default set mirrors our eval models (as Ollama builds) plus the small on-device Gemma:
+
+```bash
+ollama pull gemma4:e4b             # Gemma 4 E4B (~10 GB) — small, fits modest hardware
+ollama pull gemma4:26b             # Gemma 4 26B A4B (~16 GB) — eval model
+ollama pull qwen3:14b              # Qwen3 14B (~9 GB) — eval model
+ollama pull mistral-small3.2:24b   # Mistral Small 3.2 24B (~14 GB) — eval model
+```
+
+```env
+LOCAL_MODELS=gemma4:e4b,gemma4:26b,qwen3:14b,mistral-small3.2:24b
+LOCAL_MODELS_DEFAULT=true          # make the first one the app's default LLM
+# LOCAL_MODEL_CTX=32768            # context window for the "-32k" variants
+```
+
+Only pull what your machine can hold — every listed model appears in the app's model dropdown, but a model errors at question time if its tag hasn't been pulled. Trim `LOCAL_MODELS` to match what you actually pulled.
+
+Each model shows up twice in Chat settings: `ollama-gemma4-e4b` (OpenAI-compatible endpoint — streaming and tool-call citations, but the context window is whatever the Ollama server runs with) and `ollama-gemma4-e4b-32k` (pins the context window client-side so long retrieved evidence isn't truncated). For the first variant, start Ollama with a larger window:
+
+```bash
+OLLAMA_CONTEXT_LENGTH=32768 ollama serve
+```
+
+Everything else already runs locally by default: embeddings (FastEmbed), reranking (a local cross-encoder on Apple Metal/CUDA/CPU), and the LLM-based relevance scoring, which uses whatever chat model you selected. No API keys are needed in this mode.
+
+**Performance tip:** "LLM relevant scoring" (Settings → Retrieval settings) makes one extra LLM call *per retrieved chunk* per question — 10 chunks means 10 extra calls. Remote APIs absorb those in parallel, but a local model runs them on the same GPU as the answer, so responses get dramatically slower. Untick it when using local models; the info panel then shows the cross-encoder's relevance scores instead. The first local question also pays some one-time model-download/load costs (fastembed, cross-encoder, fastText); later questions are faster.
 
 ## 4. Run the app
 
@@ -121,7 +132,7 @@ Stop the app with `Ctrl+C` in the terminal.
 
 ---
 
-## Using the app
+## App Workflow
 
 1. **Files** tab → upload PDFs (drag-and-drop works), paste web links, or use **Use Local Folder** to import a server-local folder. Indexing runs once per file; progress shows in the UI.
 2. **Chat** tab → ask questions. Answers cite the source PDF and page.
@@ -130,11 +141,8 @@ Stop the app with `Ctrl+C` in the terminal.
 
 ### Our PDF corpus
 
-The UVA medical laboratories PDF corpus lives **outside the repo** at `../datarepo/dc_1224400_uvahealthsystemmedicallaboratories_summary`, grouped by laboratory area.
+The UVA medical laboratories PDF corpus lives outside the repo on a folder that can be imported into the system.
 
-The older sample set, if present, lives at `../sample_rag_pdfs/`.
-
-Upload whichever subset you're working with. Indexed content is stored in `ktem_app_data/` (gitignored) and survives restarts — you don't need to re-upload every time.
 
 For the organized corpus, go to **Files** → **Use Local Folder**, enter `../datarepo/dc_1224400_uvahealthsystemmedicallaboratories_summary`, keep **Include subfolders** on, and keep **Create/update groups from folders** on if you want each folder to appear as a selectable group in Chat. Duplicate filenames are imported automatically by storing duplicate-name files under their relative folder path.
 
@@ -173,31 +181,10 @@ If you're changing behavior: `flowsettings.py` for model/embedding config, `libs
 
 ---
 
-## Git workflow for teammates
-
-```bash
-git checkout -b your-name/short-feature-description
-# ...edit, test locally...
-git add <specific files>
-git commit -m "feat: what you changed"
-git push -u origin your-name/short-feature-description
-```
-
-Open a PR on GitHub targeting `main`. Get one review before merging.
-
-**Never commit**: `.env`, `ktem_app_data/`, `.venv/`, `__pycache__/`, `*.pyc`, anything under `libs/*/cache/`.
-
-Pull upstream kotaemon changes (optional, occasional):
-
-```bash
-git fetch upstream
-git merge upstream/main        # or rebase — talk to the team first
-uv sync                        # resync after a merge that touches deps
-```
-
----
 
 ## Troubleshooting
+
+Here are some bugs and quirks we ran into that may be useful for someone trying to deploy or extend this project.
 
 - **`uv: command not found`** — install it: `brew install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`, then restart your shell.
 - **`uv sync` fails on a single package** — run `uv sync --reinstall` to wipe and retry.
@@ -215,4 +202,3 @@ uv sync                        # resync after a merge that touches deps
 
   Or, with the app stopped, delete the whole cache dir (it's only a cache and is rebuilt automatically): `rm -rf "$(uv run python -c "from theflow.utils.paths import temp_path; from pathlib import Path; print(Path(temp_path(), 'cache'))")"`. To check whether the lock is actually stale, read it — a dead PID with count ≥ 1 confirms it: `uv run python -c "import diskcache; from theflow.utils.paths import temp_path; from pathlib import Path; print(diskcache.Cache(str(Path(temp_path(), 'cache'))).get('__lock__'))"`. After clearing, re-upload any file whose indexing was interrupted (a source can show in the UI with 0 chunks). Avoid hard-killing the app mid-request to prevent recurrence.
 
-Questions → ping the team chat. Bugs in our customizations → open an issue on this repo.

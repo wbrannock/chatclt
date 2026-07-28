@@ -98,7 +98,12 @@ class Render:
         if not highlight_text:
             phrase = "false"
             try:
-                lang = detect(text.replace("\n", " "))["lang"]
+                detected = detect(text.replace("\n", " "))
+                # fast_langdetect returns a dict in older versions and a list of
+                # candidates in newer ones
+                if isinstance(detected, list):
+                    detected = detected[0]
+                lang = detected["lang"]
                 if lang not in ["ja", "cn"]:
                     highlight_words = [
                         t[:-1] if t.endswith("-") else t for t in text.split("\n")
