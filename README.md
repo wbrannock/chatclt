@@ -150,25 +150,24 @@ For the organized corpus, go to **Files** → **Use Local Folder**, enter `../da
 
 ```
 chatclt/
-├── app.py                    # entrypoint (upstream)
-├── flowsettings.py           # ← OUR defaults (OpenRouter, FastEmbed, etc.)
+├── app.py                    # entrypoint 
+├── flowsettings.py           # defaults (OpenRouter, FastEmbed, etc.)
 ├── pyproject.toml            # uv workspace root
-├── uv.lock                   # locked dep versions — commit changes
+├── uv.lock                   # locked dep versions 
 ├── .python-version           # pins Python 3.11
-├── README.md                 # ← this file
+├── README.md                 # you are here
 ├── START_HERE.md             # quick start cheatsheet
 ├── .env.example              # template for .env
 ├── libs/
 │   ├── kotaemon/             # RAG engine (upstream, editable workspace member)
 │   └── ktem/                 # web UI (upstream, editable workspace member)
 │       └── ktem/
-│           ├── assets/       # ← OUR theme, CSS, JS, favicon tweaks
-│           ├── pages/chat/   # ← OUR chat panel tweaks
-│           └── reasoning/    # ← OUR reasoning flow tweaks
-└── ktem_app_data/            # local index + uploads (gitignored)
+│           ├── assets/       # Theme Files
+│           ├── pages/chat/   # Chat panel tweaks
+│           └── reasoning/    # Reasoning flow tweaks
+└── ktem_app_data/            # local index + uploads (gitignored) (data storage)
 ```
 
-If you're changing behavior: `flowsettings.py` for model/embedding config, `libs/ktem/ktem/assets/theme.py` + `main.css` for look and feel, `libs/ktem/ktem/reasoning/simple.py` for how answers are generated.
 
 ### Managing dependencies
 
