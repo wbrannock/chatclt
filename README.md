@@ -10,19 +10,21 @@ ChatCLT: a PDF-grounded chat app for querying a medical / laboratory literature 
 - **Reranking**: local cross-encoder `BAAI/bge-reranker-base` (Apple Metal/CUDA/CPU, no key needed), on by default; optional Cohere rerank with a `COHERE_API_KEY`
 - **Relevance scoring**: optional per-chunk LLM scoring using the selected chat model (shown in the info panel; turn off for local models — see performance tip below)
 - **Vector store / index**: local, persisted in `ktem_app_data/` — survives restarts
-- **Auth**: local login, default `admin` / `admin`
+- **Auth**: local login, default username is `admin` / default password is `admin`
 
 ---
 
 ## Prerequisites
 
-- macOS or Linux (Apple Silicon works)
-- [uv](https://docs.astral.sh/uv/) — install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or `brew install uv`
-- Git
-- An **OpenRouter** API key — sign up at https://openrouter.ai/keys (free tier works to start; add credit to use remote models)
-- Optional: [Ollama](https://ollama.com) for running chat models fully locally (no API key) — see [Local models via Ollama](#local-models-via-ollama-fully-offline)
+- macOS or Linux (Apple Silicon recommended for LLM inference)
+- [uv](https://docs.astral.sh/uv/) — install with `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- Github access
+- OpenRouter API key (credit needed for remote model usage)
+- [Ollama](https://ollama.com) for running chat models fully locally (no API key) — see [Local models via Ollama](#local-models-via-ollama-fully-offline)
 
-uv manages Python itself — you do **not** need conda or a pre-installed Python. Disk: the venv is ~4 GB. Indexed PDFs add ~100 MB per few dozen files.
+uv manages Python installation and dependencies 
+
+Disk: the venv is  roughly 4 GB. Indexed PDFs add ~100 MB per few dozen files.
 
 ---
 
@@ -42,24 +44,20 @@ uv sync
 That one command:
 - Installs Python 3.11 (pinned in `.python-version`) if you don't have it
 - Creates `.venv/` in the repo root
-- Installs every dep from `uv.lock` — **exact versions everyone on the team gets**
-- Installs the `libs/kotaemon` and `libs/ktem` workspaces in editable mode, so your code edits apply immediately
+- Installs every dep from `uv.lock` 
+- Installs the `libs/kotaemon` and `libs/ktem` workspaces in editable mode
 
-First run takes ~1–3 minutes (fast — uv uses a global cache and parallel downloads). Subsequent `uv sync` calls are near-instant.
+First run takes ~1–3 minutes (fast — uv uses a global cache and parallel downloads). Subsequent `uv sync` calls are near-instant because of caching.
 
-You have two options for activation:
+Activation:
 
 - **Prefix with `uv run`** (recommended, no activation needed):
   ```bash
   uv run python app.py
   ```
-- **Activate the venv** the old-school way:
-  ```bash
-  source .venv/bin/activate
-  python app.py
-  ```
 
-To wipe and rebuild the virtual environment:
+
+To wipe and rebuild the virtual environment if something breaks:
 
 ```bash
 rm -rf .venv
@@ -148,7 +146,7 @@ For the organized corpus, go to **Files** → **Use Local Folder**, enter `../da
 
 ---
 
-## Project layout (what's ours vs upstream)
+## Project File Layout 
 
 ```
 chatclt/
